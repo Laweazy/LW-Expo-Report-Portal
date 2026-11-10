@@ -1,0 +1,2100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LoveWorld Expo 2026 - Reporting & Analytics System</title>
+  
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f8fafc; color: #1e293b; }
+    .hidden { display: none !important; }
+    .btn { cursor: pointer; border: none; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+  </style>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    var currentUser = null;
+    var supabaseClient = null;
+
+    var savedUrl = localStorage.getItem('expo_supabase_url') || '';
+    var savedKey = localStorage.getItem('expo_supabase_key') || '';
+    
+    if (savedUrl && savedKey && window.supabase) {
+      try {
+        var cleanUrl = savedUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+        supabaseClient = window.supabase.createClient(cleanUrl, savedKey);
+      } catch (err) {}
+    }
+
+    var DEMO_USERS = {
+      admin: {
+        email: 'admin@expo2026.org',
+        name: 'Lead Expo Admin',
+        role: 'admin',
+        org: 'LoveWorld Expo Secretariat',
+        location: 'Main Secretariat (HQ)'
+      },
+      cluster: {
+        email: 'cluster1@expo2026.org',
+        name: 'Pastor Michael Adams',
+        role: 'cluster',
+        org: 'Cluster 1',
+        location: 'Pavilion 1 - Tech City',
+        subchairman: 'Pastor Michael Adams',
+        secretary: 'Deacon Emmanuel Obi'
+      },
+      exhibitor: {
+        email: 'exhibitor.360suite1@expo2026.org',
+        name: '360 Suite Representative',
+        role: 'exhibitor',
+        org: '360 Suite',
+        location: 'Booth P1-B01',
+        pavilion: 'Pavilion 1 - Tech City',
+        cluster_name: 'Cluster 1'
+      }
+    };
+
+    window.demoLogin = function(roleKey) {
+      currentUser = DEMO_USERS[roleKey] || DEMO_USERS.admin;
+      
+      var loginSec = document.getElementById('loginSection');
+      if (loginSec) {
+        loginSec.style.display = 'none';
+        loginSec.classList.add('hidden');
+      }
+
+      var nav = document.getElementById('appNav');
+      if (nav) {
+        nav.style.display = 'block';
+        nav.classList.remove('hidden');
+      }
+
+      var nameEl = document.getElementById('userNameDisplay');
+      var roleEl = document.getElementById('userRoleBadge');
+      var locEl = document.getElementById('userLocationDisplay');
+      if (nameEl) nameEl.textContent = currentUser.org || currentUser.name;
+      if (roleEl) roleEl.textContent = currentUser.role.toUpperCase();
+      if (locEl) locEl.textContent = currentUser.location;
+
+      var exSec = document.getElementById('exhibitorSection');
+      var clSec = document.getElementById('clusterSection');
+      var adSec = document.getElementById('adminSection');
+
+      if (exSec) { exSec.style.display = 'none'; exSec.classList.add('hidden'); }
+      if (clSec) { clSec.style.display = 'none'; clSec.classList.add('hidden'); }
+      if (adSec) { adSec.style.display = 'none'; adSec.classList.add('hidden'); }
+
+      if (currentUser.role === 'admin') {
+        if (adSec) { adSec.style.display = 'block'; adSec.classList.remove('hidden'); }
+        if (typeof window.setupAdminPortal === 'function') window.setupAdminPortal();
+      } else if (currentUser.role === 'cluster') {
+        if (clSec) { clSec.style.display = 'block'; clSec.classList.remove('hidden'); }
+        if (typeof window.setupClusterPortal === 'function') window.setupClusterPortal();
+      } else {
+        if (exSec) { exSec.style.display = 'block'; exSec.classList.remove('hidden'); }
+        if (typeof window.setupExhibitorPortal === 'function') window.setupExhibitorPortal();
+      }
+
+      window.scrollTo(0, 0);
+    };
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Top Announcement Bar -->
+  <header class="bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 text-white text-xs py-2.5 px-4 shadow-sm">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span class="font-bold tracking-wide uppercase text-xs">LoveWorld Expo 2026 Reporting Portal</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="connectionBadge" class="px-2.5 py-0.5 rounded-full text-[11px] bg-blue-800 text-blue-200 font-semibold">
+          ● Ready
+        </span>
+        <button type="button" onclick="openDatabaseConfigModal()" class="px-2 py-0.5 rounded-full text-[10px] bg-blue-700 hover:bg-blue-600 text-white font-bold cursor-pointer transition">
+          ⚙️ Database Setup
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Navigation -->
+  <nav id="appNav" class="hidden sticky top-0 z-40 bg-white/95 border-b border-slate-200 shadow-sm transition-all duration-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-700 flex items-center justify-center text-white shadow font-bold text-lg">
+            EX
+          </div>
+          <div>
+            <h1 class="font-bold text-slate-900 text-base leading-tight">Expo Reporting Portal</h1>
+            <p class="text-xs text-slate-500">LoveWorld Expo 2026</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <div class="text-right hidden sm:block">
+            <p id="userNameDisplay" class="text-sm font-semibold text-slate-900 leading-tight">User</p>
+            <div class="flex items-center justify-end gap-1.5 text-xs text-slate-500">
+              <span id="userRoleBadge" class="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-blue-100 text-blue-800">
+                Role
+              </span>
+              <span id="userLocationDisplay">Location</span>
+            </div>
+          </div>
+          <button type="button" onclick="handleLogout()" class="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-lg transition border border-rose-200 cursor-pointer">
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Application Main Container -->
+  <main id="appContainer" class="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+    
+    <!-- 1. LOGIN SCREEN -->
+    <div id="loginSection" class="min-h-[75vh] flex items-center justify-center py-8">
+      <div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 p-8 sm:p-10 relative overflow-hidden">
+        <div class="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-500"></div>
+        
+        <div class="text-center mb-6">
+          <div class="w-14 h-14 mx-auto rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 font-bold text-2xl shadow-inner mb-3">
+            📋
+          </div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Sign In to Report</h2>
+          <p class="text-xs text-slate-500 mt-1">Select a role below for instant 1-click test access:</p>
+        </div>
+
+        <!-- GOOGLE SHEETS LIVE SYNC BADGE -->
+        <div id="sheetStatusBadge" class="flex items-center justify-between text-xs px-3.5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl mb-4 shadow-sm">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="font-bold">Google Sheet Sync Active</span>
+            <span class="text-[11px] text-emerald-600 font-medium" id="sheetCountLabel">(155 accounts)</span>
+          </div>
+          <a href="https://docs.google.com/spreadsheets/d/1SLHCcpLxXnReKpL3OdC7bepYHAI4GZgHCyLn1pCQfI4/edit?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-blue-700 hover:text-blue-900 underline font-semibold flex items-center gap-1">
+            Open Sheet ↗
+          </a>
+        </div>
+
+        <!-- LOGIN ERROR MESSAGE CONTAINER -->
+        <div id="loginErrorMessage" class="hidden p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl mb-4"></div>
+
+        <!-- 1-CLICK DEMO BUTTONS -->
+        <div class="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl space-y-3">
+          <p class="text-xs text-center font-bold text-blue-950 uppercase tracking-wider">👉 Click Any Role to Enter Portal:</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="window.demoLogin('admin')" 
+              class="w-full py-3 px-2 text-xs font-bold rounded-xl bg-blue-700 hover:bg-blue-800 text-white shadow-md transition text-center cursor-pointer border border-blue-900">
+              🔑 Admin
+            </button>
+            <button type="button" onclick="window.demoLogin('cluster')" 
+              class="w-full py-3 px-2 text-xs font-bold rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow-md transition text-center cursor-pointer border border-emerald-900">
+              🏢 Cluster 1
+            </button>
+            <button type="button" onclick="window.demoLogin('exhibitor')" 
+              class="w-full py-3 px-2 text-xs font-bold rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white shadow-md transition text-center cursor-pointer border border-indigo-900">
+              🏪 Tech Booth
+            </button>
+          </div>
+        </div>
+
+        <div class="relative flex py-2 items-center mb-4">
+          <div class="flex-grow border-t border-slate-200"></div>
+          <span class="flex-shrink mx-3 text-xs text-slate-400 uppercase font-semibold">Or Manual Email Login</span>
+          <div class="flex-grow border-t border-slate-200"></div>
+        </div>
+
+        <form onsubmit="handleManualLogin(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Email</label>
+            <input type="email" id="loginEmail" placeholder="admin@expo2026.org" 
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Password</label>
+            <input type="password" id="loginPassword" placeholder="••••••••••••" 
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">
+          </div>
+          <button type="submit" id="loginSubmitBtn"
+            class="w-full bg-slate-900 hover:bg-black text-white font-semibold py-2.5 px-4 rounded-xl shadow transition text-sm cursor-pointer">
+            Sign In with Email
+          </button>
+        </form>
+
+        <div class="mt-6 pt-4 border-t border-slate-100 text-center">
+          <button type="button" onclick="openDatabaseConfigModal()" class="text-xs text-blue-700 hover:text-blue-900 font-semibold inline-flex items-center gap-1 cursor-pointer">
+            ⚙️ Connect Live Supabase Database
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. EXHIBITOR VIEW -->
+    <div id="exhibitorSection" class="hidden space-y-6">
+      
+      <!-- Welcome Header -->
+      <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-900 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-white/20 text-white">
+                Exhibitor Portal
+              </span>
+              <span id="exhibitorBoothHeader" class="text-xs bg-amber-400 text-slate-900 px-2 py-0.5 rounded-full font-bold">
+                Booth P1-B01
+              </span>
+            </div>
+            <h2 id="exhibitorOrgName" class="text-2xl font-extrabold tracking-tight">360 Suite</h2>
+            <p id="exhibitorClusterPavilion" class="text-sm text-blue-100 mt-0.5">Pavilion 1 - Tech City • Assigned to Cluster 1</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="switchExhibitorTab('report')" id="tabBtnReport" class="px-4 py-2 rounded-xl text-xs font-bold bg-white text-blue-900 shadow-sm transition cursor-pointer">
+              Daily Report Form
+            </button>
+            <button type="button" onclick="switchExhibitorTab('analytics')" id="tabBtnAnalytics" class="px-4 py-2 rounded-xl text-xs font-bold bg-blue-800/80 hover:bg-white/20 text-white transition cursor-pointer">
+              📊 My Analytics
+            </button>
+            <button type="button" onclick="switchExhibitorTab('history')" id="tabBtnHistory" class="px-4 py-2 rounded-xl text-xs font-bold bg-blue-800/80 hover:bg-white/20 text-white transition cursor-pointer">
+              📋 My Entries & Feedback
+            </button>
+            <button type="button" onclick="switchExhibitorTab('products')" id="tabBtnProducts" class="px-4 py-2 rounded-xl text-xs font-bold bg-blue-800/80 hover:bg-white/20 text-white transition cursor-pointer">
+              My Products
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 1: Daily Report Form -->
+      <div id="exhibitorReportTab" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <div class="border-b border-slate-100 pb-5 mb-6 flex justify-between items-center">
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">Daily Exhibitors Report</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Submit your verified booth metrics and highlights for the day.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500 font-medium">Reporting Day:</span>
+            <select id="exhibitorDaySelect" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 outline-none">
+              <option value="Day 1">Day 1</option>
+              <option value="Day 2">Day 2</option>
+              <option value="Day 3">Day 3</option>
+              <option value="Day 4">Day 4</option>
+              <option value="Day 5">Day 5</option>
+              <option value="Day 6">Day 6</option>
+              <option value="Day 7">Day 7</option>
+            </select>
+          </div>
+        </div>
+
+        <form id="exhibitorReportForm" onsubmit="handleExhibitorSubmit(event)" class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Number of Staff on Stand *</label>
+              <input type="number" id="exStaffCount" required min="1" value="4"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 text-sm outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Number of Visitors Recorded *</label>
+              <input type="number" id="exVisitorsCount" required min="0" value="180"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 text-sm outline-none">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+              List of Dignitaries Received (Govt Representatives, Corporate Organizations etc)
+            </label>
+            <textarea id="exDignitaries" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 text-sm outline-none">Director of IT Ministry, Zonal Pastor</textarea>
+          </div>
+
+          <div class="p-5 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
+            <div class="flex justify-between items-center">
+              <div>
+                <label class="block text-xs font-bold text-blue-900 uppercase tracking-wider">List of Products Exhibited *</label>
+                <p class="text-xs text-blue-700/80 mt-0.5">Select products showcased today from your registered catalog</p>
+              </div>
+              <button type="button" onclick="switchExhibitorTab('products')" class="text-xs font-semibold text-blue-700 hover:underline cursor-pointer">
+                + Manage Catalog
+              </button>
+            </div>
+            
+            <div id="exhibitorProductsListContainer" class="flex flex-wrap gap-2 pt-1"></div>
+
+            <div class="pt-2">
+              <label class="block text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">Most Engaged Product for the Day *</label>
+              <select id="exMostEngagedSelect" required class="w-full px-4 py-2.5 rounded-xl border border-blue-200 bg-white focus:ring-2 focus:ring-blue-600 text-sm outline-none">
+                <option value="">Select the top engaged product...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Total Number of Engagements *</label>
+              <input type="number" id="exEngagementsCount" oninput="updateExhibitorRate()" required min="0" value="85"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-600 text-sm outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Total Conversions (Signups/Sales) *</label>
+              <input type="number" id="exConversionsCount" oninput="updateExhibitorRate()" required min="0" value="30"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-600 text-sm outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Conversion Rate (%)</label>
+              <div class="relative">
+                <input type="text" id="exConversionRate" readonly value="35.29%"
+                  class="w-full px-4 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 font-extrabold text-sm outline-none cursor-not-allowed">
+                <span class="absolute right-3 top-3 text-[10px] font-semibold text-emerald-600 uppercase">Auto</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Significant Deals / Partnerships Secured</label>
+              <textarea id="exDealsSecured" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 text-sm outline-none">Inked MoU with 2 corporate sponsors for Q1 rollout.</textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">New Requests Received</label>
+              <textarea id="exNewRequests" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 text-sm outline-none">Requested custom export format for accounting.</textarea>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Key Observations</label>
+              <textarea id="exKeyObservations" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Strong morning turnout, steady afternoon flow.</textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Challenges & Recommendations</label>
+              <textarea id="exChallenges" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Recommend clearer bay directional banners.</textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Improvements for Next Day</label>
+              <textarea id="exImprovements" rows="2" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Additional flyers at the entryway.</textarea>
+            </div>
+          </div>
+
+          <!-- Media -->
+          <div class="border-t border-slate-200 pt-6 space-y-4">
+            <h4 class="text-sm font-bold text-slate-900">📷 Media Attachments</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="border-2 border-dashed border-slate-300 rounded-2xl p-4 text-center bg-slate-50">
+                <input type="file" id="exPhotoInput" multiple accept="image/*" class="hidden" onchange="handlePhotoUpload(event)">
+                <button type="button" onclick="document.getElementById('exPhotoInput').click()" class="text-xs font-bold px-4 py-2 bg-white rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer">
+                  📁 Attach Photos of the Day
+                </button>
+                <div id="exPhotoPreviewContainer" class="flex flex-wrap gap-2 mt-3 justify-center"></div>
+              </div>
+              <div class="border border-slate-200 rounded-2xl p-4 bg-slate-50">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Video Highlight Link (Optional)</label>
+                <input type="url" id="exVideoUrl" placeholder="https://drive.google.com/... or YouTube unlisted link"
+                  class="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs outline-none">
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-4 flex justify-end">
+            <button type="submit" class="bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-8 rounded-xl shadow-md transition text-sm cursor-pointer">
+              Submit Daily Report
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab 2: Exhibitor Personal Analytics -->
+      <div id="exhibitorAnalyticsTab" class="hidden space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+          <div class="flex justify-between items-center mb-6">
+            <div>
+              <h3 class="text-lg font-bold text-slate-900">My Performance Analytics</h3>
+              <p class="text-xs text-slate-500">Real-time analytical graphs generated directly from your daily submitted reports.</p>
+            </div>
+            <button type="button" onclick="exportMyExhibitorEntries()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition border border-slate-300 cursor-pointer">
+              📥 Export My Data (CSV)
+            </button>
+          </div>
+
+          <!-- KPI Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+              <p class="text-xs font-bold text-blue-900 uppercase">Total Visitors</p>
+              <h4 id="exStatVisitors" class="text-2xl font-extrabold text-blue-950 mt-1">320</h4>
+              <p class="text-[11px] text-blue-700 mt-1">Cumulative footfall recorded</p>
+            </div>
+            <div class="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+              <p class="text-xs font-bold text-amber-900 uppercase">Total Engagements</p>
+              <h4 id="exStatEngagements" class="text-2xl font-extrabold text-amber-950 mt-1">140</h4>
+              <p class="text-[11px] text-amber-700 mt-1">Direct product demos given</p>
+            </div>
+            <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+              <p class="text-xs font-bold text-emerald-900 uppercase">Total Conversions</p>
+              <h4 id="exStatConversions" class="text-2xl font-extrabold text-emerald-950 mt-1">45</h4>
+              <p class="text-[11px] text-emerald-700 mt-1">Signups / subscriptions / sales</p>
+            </div>
+            <div class="p-4 bg-purple-50 border border-purple-200 rounded-2xl">
+              <p class="text-xs font-bold text-purple-900 uppercase">Overall Conversion Rate</p>
+              <h4 id="exStatRate" class="text-2xl font-extrabold text-purple-950 mt-1">32.14%</h4>
+              <p class="text-[11px] text-purple-700 mt-1">Conversions ÷ Engagements</p>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Daily Footfall & Engagement Trends</h4>
+              <div class="h-60 relative">
+                <canvas id="exhibitorTrendChart"></canvas>
+              </div>
+            </div>
+            <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Conversions by Exhibition Day</h4>
+              <div class="h-60 relative">
+                <canvas id="exhibitorConvChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Detailed Entries Table & Admin Feedback (NEW FORMATTED TABLE!) -->
+      <div id="exhibitorHistoryTab" class="hidden space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+            <div>
+              <h3 class="text-lg font-bold text-slate-900">My Daily Records & Feedback</h3>
+              <p class="text-xs text-slate-500">Every record entered by your booth, review status, and direct admin notes.</p>
+            </div>
+            <button type="button" onclick="exportMyExhibitorEntries()" class="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer">
+              📥 Export Entries (CSV)
+            </button>
+          </div>
+
+          <!-- Nicely Formatted Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                  <th class="py-3 px-3.5">Day</th>
+                  <th class="py-3 px-3.5">Staff</th>
+                  <th class="py-3 px-3.5">Visitors</th>
+                  <th class="py-3 px-3.5">Engagements</th>
+                  <th class="py-3 px-3.5">Conversions</th>
+                  <th class="py-3 px-3.5">Rate</th>
+                  <th class="py-3 px-3.5">Top Product</th>
+                  <th class="py-3 px-3.5">Status</th>
+                  <th class="py-3 px-3.5">Admin Feedback</th>
+                </tr>
+              </thead>
+              <tbody id="exhibitorTableBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+            </table>
+          </div>
+
+          <!-- Cards View for Full Reading -->
+          <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Detailed Submissions & Notes</h4>
+          <div id="exhibitorSubmissionsList" class="space-y-4"></div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Products Catalog -->
+      <div id="exhibitorProductsTab" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <h3 class="text-lg font-bold text-slate-900 mb-1">My Product & Service Catalog</h3>
+        <p class="text-xs text-slate-500 mb-6">Pre-populate your products here once so they appear in your reporting dropdowns.</p>
+
+        <form id="addProductForm" onsubmit="handleAddProductSubmit(event)" class="flex flex-col sm:flex-row gap-3 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+          <input type="text" id="newProductName" required placeholder="Product or Service Name (e.g. 360 CRM Enterprise)"
+            class="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">
+          <button type="submit" class="bg-blue-700 hover:bg-blue-800 text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition cursor-pointer">
+            + Add to Catalog
+          </button>
+        </form>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <th class="py-3 px-4">#</th>
+                <th class="py-3 px-4">Product Name</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="catalogTableBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 3. CLUSTER VIEW -->
+    <div id="clusterSection" class="hidden space-y-6">
+      
+      <div class="bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-white/20 text-white">
+              Cluster Secretariat Portal
+            </span>
+            <h2 id="clusterTitleDisplay" class="text-2xl font-extrabold tracking-tight mt-1">Cluster 1</h2>
+            <p id="clusterLeadershipDisplay" class="text-sm text-emerald-100 mt-0.5">Subchairman: Pastor Michael • Secretary: Deacon Emmanuel</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="switchClusterTab('daily')" id="clTabBtnDaily" class="px-4 py-2 rounded-xl text-xs font-bold bg-white text-emerald-900 shadow-sm transition cursor-pointer">
+              Daily Cluster Report
+            </button>
+            <button type="button" onclick="switchClusterTab('analytics')" id="clTabBtnAnalytics" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-950/60 hover:bg-white/20 text-white transition cursor-pointer">
+              📊 Cluster Analytics
+            </button>
+            <button type="button" onclick="switchClusterTab('history')" id="clTabBtnHistory" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-950/60 hover:bg-white/20 text-white transition cursor-pointer">
+              📋 Our Entries & Feedback
+            </button>
+            <button type="button" onclick="switchClusterTab('final')" id="clTabBtnFinal" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-950/60 hover:bg-white/20 text-white transition cursor-pointer">
+              Final Expo Report (Word/PDF)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 1: Daily Cluster Report -->
+      <div id="clusterDailyTab" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <div class="border-b border-slate-100 pb-5 mb-6 flex justify-between items-center">
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">Cluster Daily Assessment Report</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Submit cluster-wide activities and proferred solutions for the day.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500 font-medium">Exhibition Day:</span>
+            <select id="clusterDaySelect" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 outline-none">
+              <option value="Day 1">Day 1</option>
+              <option value="Day 2">Day 2</option>
+              <option value="Day 3">Day 3</option>
+              <option value="Day 4">Day 4</option>
+              <option value="Day 5">Day 5</option>
+              <option value="Day 6">Day 6</option>
+              <option value="Day 7">Day 7</option>
+            </select>
+          </div>
+        </div>
+
+        <form id="clusterDailyForm" onsubmit="handleClusterSubmit(event)" class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Cluster Subchairman *</label>
+              <input type="text" id="clSubchairman" required placeholder="Subchairman Name"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Cluster Secretary *</label>
+              <input type="text" id="clSecretary" required placeholder="Secretary Name"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Summary of Activities for the Day *</label>
+            <textarea id="clSummary" rows="3" required placeholder="Key cluster events, meetings, customer interactions..."
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Full opening ceremonies conducted. All booths in pavilion active with strong attendance.</textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Significant Achievements *</label>
+            <textarea id="clAchievements" rows="2" required placeholder="Cluster achievements and milestones reached..."
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Over 1,200 delegates hosted across our cluster booths.</textarea>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Challenges & Solutions Proferred *</label>
+              <textarea id="clChallengesSolutions" rows="3" required placeholder="Problems encountered and actions taken..."
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Aisle traffic congested during keynotes; crowd marshals deployed to guide one-way traffic.</textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Improvements for Next Day *</label>
+              <textarea id="clImprovements" rows="3" required placeholder="Proposed operational improvements for tomorrow..."
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Deploy extra digital info monitors at cluster gate.</textarea>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Comments (If Any)</label>
+            <textarea id="clComments" rows="2" placeholder="Additional notes for expo management..."
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">Exhibitors expressed satisfaction with power and logistics.</textarea>
+          </div>
+
+          <div class="pt-4 flex justify-end">
+            <button type="submit" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 px-8 rounded-xl shadow-md transition text-sm cursor-pointer">
+              Submit Cluster Daily Report
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab 2: Cluster Analytics -->
+      <div id="clusterAnalyticsTab" class="hidden space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+          <h3 class="text-lg font-bold text-slate-900 mb-1">Cluster Operations Analytics</h3>
+          <p class="text-xs text-slate-500 mb-6">Overview of daily reporting consistency and documented achievements across our cluster.</p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+              <p class="text-xs font-bold text-emerald-900 uppercase">Daily Reports Submitted</p>
+              <h4 id="clStatReports" class="text-2xl font-extrabold text-emerald-950 mt-1">1</h4>
+              <p class="text-[11px] text-emerald-700 mt-1">Of 7 Exhibition Days</p>
+            </div>
+            <div class="p-4 bg-teal-50 border border-teal-200 rounded-2xl">
+              <p class="text-xs font-bold text-teal-900 uppercase">Key Milestones Documented</p>
+              <h4 id="clStatMilestones" class="text-2xl font-extrabold text-teal-950 mt-1">1</h4>
+              <p class="text-[11px] text-teal-700 mt-1">Achievements recorded</p>
+            </div>
+            <div class="p-4 bg-slate-100 border border-slate-200 rounded-2xl">
+              <p class="text-xs font-bold text-slate-700 uppercase">Review Status</p>
+              <h4 id="clStatStatus" class="text-2xl font-extrabold text-emerald-700 mt-1">Reviewed</h4>
+              <p class="text-[11px] text-slate-500 mt-1">Admin feedback active</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+            <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4">Chronological Cluster Daily Highlights</h4>
+            <div id="clusterTimelineContainer" class="space-y-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Formatted Table & History for Cluster -->
+      <div id="clusterHistoryTab" class="hidden space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+            <div>
+              <h3 class="text-lg font-bold text-slate-900">Our Cluster Daily Entries</h3>
+              <p class="text-xs text-slate-500">Nicely formatted table of all cluster reports with admin feedback.</p>
+            </div>
+            <button type="button" onclick="exportMyClusterEntries()" class="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow transition cursor-pointer">
+              📥 Export Entries (CSV)
+            </button>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                  <th class="py-3 px-3.5">Day</th>
+                  <th class="py-3 px-3.5">Subchairman</th>
+                  <th class="py-3 px-3.5">Secretary</th>
+                  <th class="py-3 px-3.5">Summary</th>
+                  <th class="py-3 px-3.5">Achievements</th>
+                  <th class="py-3 px-3.5">Status</th>
+                  <th class="py-3 px-3.5">Admin Feedback</th>
+                </tr>
+              </thead>
+              <tbody id="clusterTableBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+            </table>
+          </div>
+
+          <div id="clusterSubmissionsList" class="space-y-4"></div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Cluster Final Report -->
+      <div id="clusterFinalTab" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <h3 class="text-xl font-bold text-slate-900">Overall Expo Cluster Final Report</h3>
+        <p class="text-xs text-slate-500 mb-6">Submit your cumulative report summary and attach your Word / PDF documents.</p>
+
+        <form id="clusterFinalForm" onsubmit="handleClusterFinalSubmit(event)" class="space-y-6">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Executive Summary *</label>
+            <textarea id="clFinalSummary" rows="4" required placeholder="Comprehensive synthesis of the cluster's performance over the entire expo..."
+              class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none"></textarea>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Total Cluster Leads Recorded</label>
+              <input type="number" id="clFinalLeads" placeholder="e.g. 640"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Total Deals / Partnerships Closed</label>
+              <input type="number" id="clFinalDeals" placeholder="e.g. 52"
+                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm outline-none">
+            </div>
+          </div>
+
+          <div class="border-2 border-dashed border-emerald-300 bg-emerald-50/40 rounded-2xl p-6 text-center">
+            <input type="file" id="clDocInput" multiple accept=".pdf,.doc,.docx" class="hidden" onchange="handleDocUpload(event)">
+            <button type="button" onclick="document.getElementById('clDocInput').click()" class="px-5 py-2.5 bg-emerald-700 text-white font-bold text-xs rounded-xl hover:bg-emerald-800 transition cursor-pointer">
+              📄 Attach Word (.docx) / PDF Documents
+            </button>
+            <div id="clDocPreviewContainer" class="flex flex-col gap-2 mt-4 max-w-md mx-auto"></div>
+          </div>
+
+          <div class="pt-4 flex justify-end">
+            <button type="submit" class="bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-3 px-8 rounded-xl shadow-md transition text-sm cursor-pointer">
+              Submit Final Expo Report
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- 4. ADMIN VIEW -->
+    <div id="adminSection" class="hidden space-y-8">
+      
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div>
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-purple-100 text-purple-800">
+            Admin Master Control
+          </span>
+          <h2 class="text-2xl font-extrabold text-slate-900 mt-1">Expo Reporting & Feedback Center</h2>
+          <p class="text-xs text-slate-500">Live oversight across all 134 exhibitors and 20 clusters.</p>
+        </div>
+        <button type="button" onclick="exportDataToCSV()" class="px-4 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl transition cursor-pointer">
+          📥 Export All Data (CSV)
+        </button>
+      </div>
+
+      <!-- Metric Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Reports Logged</p>
+          <h3 id="adminMetricReports" class="text-2xl font-extrabold text-slate-900 mt-1">2</h3>
+          <p class="text-[11px] text-emerald-600 font-semibold mt-2">● Real-time tracking</p>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Visitors</p>
+          <h3 id="adminMetricVisitors" class="text-2xl font-extrabold text-slate-900 mt-1">320</h3>
+          <p class="text-[11px] text-indigo-600 font-semibold mt-2">Aggregate booth footfall</p>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Engagements</p>
+          <h3 id="adminMetricEngagements" class="text-2xl font-extrabold text-slate-900 mt-1">140</h3>
+          <p class="text-[11px] text-amber-600 font-semibold mt-2">Documented interactions</p>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Conversions</p>
+          <h3 id="adminMetricConversions" class="text-2xl font-extrabold text-slate-900 mt-1">45</h3>
+          <p id="adminMetricAvgRate" class="text-[11px] text-emerald-600 font-semibold mt-2">Avg rate: 32.1%</p>
+        </div>
+      </div>
+
+      <!-- Analytics Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 class="text-sm font-bold text-slate-900 mb-1">Daily Visitors & Engagement Trends</h3>
+          <p class="text-xs text-slate-400 mb-4">Overall footfall vs engagements across exhibition days</p>
+          <div class="h-64 relative">
+            <canvas id="adminVisitorsChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 class="text-sm font-bold text-slate-900 mb-1">Top Engaged Products Across Expo</h3>
+          <p class="text-xs text-slate-400 mb-4">Products generating highest crowd engagement</p>
+          <div class="h-64 relative">
+            <canvas id="adminProductsChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Master Reports Feed -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">All Submissions Feed</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Filter by entity, date, review status, and send instant feedback.</p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <select id="adminFilterType" onchange="renderAdminFeed()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 outline-none">
+              <option value="all">All Submissions</option>
+              <option value="exhibitor">Exhibitors Only</option>
+              <option value="cluster_daily">Cluster Daily Only</option>
+              <option value="cluster_final">Cluster Final Only</option>
+            </select>
+
+            <select id="adminFilterDay" onchange="renderAdminFeed()" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 outline-none">
+              <option value="all">All Days</option>
+              <option value="Day 1">Day 1</option>
+              <option value="Day 2">Day 2</option>
+              <option value="Day 3">Day 3</option>
+              <option value="Day 4">Day 4</option>
+              <option value="Day 5">Day 5</option>
+              <option value="Day 6">Day 6</option>
+              <option value="Day 7">Day 7</option>
+            </select>
+
+            <input type="text" id="adminSearchInput" oninput="renderAdminFeed()" placeholder="Search brand or cluster..."
+              class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none w-48">
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
+                <th class="py-3 px-4">Entity & Pavilion</th>
+                <th class="py-3 px-4">Report Type</th>
+                <th class="py-3 px-4">Day</th>
+                <th class="py-3 px-4">Key Metrics</th>
+                <th class="py-3 px-4">Status & Feedback</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminFeedTableBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- DATABASE CONFIGURATION MODAL -->
+  <div id="dbConfigModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div>
+          <h4 class="text-base font-bold text-slate-900">Connect Free Supabase Database</h4>
+          <p class="text-xs text-slate-500">Enable live online syncing across all 150+ users</p>
+        </div>
+        <button type="button" onclick="closeDatabaseConfigModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Project URL</label>
+          <input type="url" id="cfgSupabaseUrl" placeholder="https://yourproject.supabase.co"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:ring-2 focus:ring-blue-600">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Anon Public Key</label>
+          <input type="password" id="cfgSupabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:ring-2 focus:ring-blue-600">
+        </div>
+        
+        <p class="text-[11px] text-slate-500">
+          💡 Found in your Supabase Dashboard under <strong>Project Settings → API</strong>.
+        </p>
+
+        <div class="pt-3 border-t border-slate-100">
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Google Sheets Credentials URL</label>
+            <a href="https://docs.google.com/spreadsheets/d/1SLHCcpLxXnReKpL3OdC7bepYHAI4GZgHCyLn1pCQfI4/edit?usp=sharing" target="_blank" class="text-[11px] text-blue-700 underline font-semibold">Open Sheet ↗</a>
+          </div>
+          <input type="url" id="cfgGoogleSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../edit"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:ring-2 focus:ring-blue-600">
+          <p class="text-[11px] text-slate-500 mt-1">
+            📊 Live cloud sheet managing 155+ exhibitor & cluster logins and passwords in real time.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeDatabaseConfigModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+          Cancel
+        </button>
+        <button type="button" onclick="saveDatabaseConfig()" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white shadow transition cursor-pointer">
+          Save & Connect
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN FEEDBACK MODAL -->
+  <div id="feedbackModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div>
+          <h4 class="text-base font-bold text-slate-900">Provide Admin Feedback</h4>
+          <p id="modalTargetLabel" class="text-xs text-slate-500">To: 360 Suite (Day 1)</p>
+        </div>
+        <button type="button" onclick="closeFeedbackModal()" class="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">✕</button>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Admin Remarks / Guidance</label>
+        <textarea id="modalFeedbackText" rows="4" placeholder="Enter clear feedback, recommendations, or acknowledgments..."
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-600 text-sm outline-none"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeFeedbackModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+          Cancel
+        </button>
+        <button type="button" onclick="submitAdminFeedback()" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white shadow-md transition cursor-pointer">
+          Send Feedback
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION LOGIC SCRIPT -->
+  <script>
+    var activeFeedbackTarget = null;
+    var visitorsChart = null;
+    var productsChart = null;
+    var exhibitorTrendChart = null;
+    var exhibitorConvChart = null;
+    var exhibitorPhotosBuffer = [];
+    var clusterPhotosBuffer = [];
+    var clusterDocFiles = [];
+
+    function openDatabaseConfigModal() {
+      document.getElementById('cfgSupabaseUrl').value = localStorage.getItem('expo_supabase_url') || '';
+      document.getElementById('cfgSupabaseKey').value = localStorage.getItem('expo_supabase_key') || '';
+      var sheetInput = document.getElementById('cfgGoogleSheetUrl');
+      if (sheetInput) {
+        sheetInput.value = localStorage.getItem('expo_google_sheet_url') || DEFAULT_SHEET_URL;
+      }
+      document.getElementById('dbConfigModal').classList.remove('hidden');
+    }
+    function closeDatabaseConfigModal() {
+      document.getElementById('dbConfigModal').classList.add('hidden');
+    }
+    function saveDatabaseConfig() {
+      var rawUrl = document.getElementById('cfgSupabaseUrl').value.trim();
+      var key = document.getElementById('cfgSupabaseKey').value.trim();
+      if (!rawUrl || !key) {
+        alert('Please enter both Supabase URL and Anon Key.');
+        return;
+      }
+      var cleanUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+      localStorage.setItem('expo_supabase_url', cleanUrl);
+      localStorage.setItem('expo_supabase_key', key);
+      var sheetInput = document.getElementById('cfgGoogleSheetUrl');
+      if (sheetInput && sheetInput.value.trim()) {
+        localStorage.setItem('expo_google_sheet_url', sheetInput.value.trim());
+        syncGoogleSheetCredentials();
+      }
+
+      try {
+        if (window.supabase) {
+          supabaseClient = window.supabase.createClient(cleanUrl, key);
+        }
+      } catch (e) {}
+
+      closeDatabaseConfigModal();
+      document.getElementById('connectionBadge').textContent = '● Live Supabase Connected';
+      document.getElementById('connectionBadge').className = 'px-2.5 py-0.5 rounded-full text-[11px] bg-emerald-600 text-white font-semibold';
+      alert('Supabase connected successfully to ' + cleanUrl + '!');
+    }
+
+    if (savedUrl && savedKey) {
+      document.getElementById('connectionBadge').textContent = '● Live Supabase Connected';
+      document.getElementById('connectionBadge').className = 'px-2.5 py-0.5 rounded-full text-[11px] bg-emerald-600 text-white font-semibold';
+    }
+
+    function getStore(key, defaultVal) {
+      try {
+        var saved = localStorage.getItem('expo_' + key);
+        return saved ? JSON.parse(saved) : defaultVal;
+      } catch (e) {
+        return defaultVal;
+      }
+    }
+    function setStore(key, val) {
+      try {
+        localStorage.setItem('expo_' + key, JSON.stringify(val));
+      } catch (e) {}
+    }
+
+    var exhibitorProducts = getStore('products', {
+      "exhibitor.360suite1@expo2026.org": [
+        { id: "p1", name: "360 CRM Enterprise", active: true },
+        { id: "p2", name: "360 Lead Capture Mobile", active: true },
+        { id: "p3", name: "360 Event Analytics Hub", active: true }
+      ]
+    });
+
+    var exhibitorReports = getStore('exhibitor_reports', [
+      {
+        id: "rep-1",
+        user_email: "exhibitor.360suite1@expo2026.org",
+        org_name: "360 Suite",
+        booth: "P1-B01",
+        pavilion: "Pavilion 1 - Tech City",
+        day: "Day 1",
+        staff_count: 5,
+        visitors_count: 320,
+        dignitaries: "Zonal Pastor, Ministry Directors",
+        products_exhibited: ["360 CRM Enterprise", "360 Lead Capture Mobile"],
+        most_engaged: "360 Lead Capture Mobile",
+        engagements: 140,
+        conversions: 45,
+        conversion_rate: "32.14%",
+        deals: "Partnered with 3 Tech hubs for bulk deployment",
+        new_requests: "Offline sync for rural churches",
+        key_observations: "Peak traffic between 2 PM and 5 PM",
+        challenges: "Wi-Fi bandwidth dips in late afternoon",
+        improvements: "Set up dedicated local hotspot",
+        pictures: [],
+        video_url: "",
+        status: "reviewed",
+        admin_feedback: "Commendable footfall and conversion rate! IT team has deployed an auxiliary access point near Bay 1.",
+        created_at: new Date(Date.now() - 86400000).toISOString()
+      }
+    ]);
+
+    var clusterReports = getStore('cluster_reports', [
+      {
+        id: "cl-1",
+        user_email: "cluster1@expo2026.org",
+        cluster_name: "Cluster 1",
+        subchairman: "Pastor Michael Adams",
+        secretary: "Deacon Emmanuel Obi",
+        day: "Day 1",
+        summary: "Grand opening of Pavilion 1. All 13 tech booths operational with high attendance.",
+        achievements: "Over 1,200 unique delegates visited Pavilion 1 on opening day.",
+        challenges_solutions: "Minor crowd congestion around main aisle; rerouted visitor path clockwise.",
+        improvements: "Add more digital signage at pavilion foyer.",
+        comments: "Great coordination with security and protocol teams.",
+        pictures: [],
+        video_url: "",
+        status: "reviewed",
+        admin_feedback: "Excellent management of the tech pavilion. Keep up the high standards.",
+        created_at: new Date(Date.now() - 86400000).toISOString()
+      }
+    ]);
+
+    var clusterFinalReports = getStore('cluster_final_reports', []);
+
+
+    // --- GOOGLE SHEETS LIVE CREDENTIALS INTEGRATION ---
+    var DEFAULT_SHEET_ID = '1SLHCcpLxXnReKpL3OdC7bepYHAI4GZgHCyLn1pCQfI4';
+    var DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/' + DEFAULT_SHEET_ID + '/edit?usp=sharing';
+    var cachedAccounts = [{"Role": "admin", "Pavilion / Location": "Main Secretariat", "Organization / Brand": "LoveWorld Expo Secretariat", "Assigned Cluster": "", "Booth Number": "HQ-01", "Contact Name": "Lead Expo Admin", "Login Email": "admin@expo2026.org", "Temporary Password": "AdminExpo2026!Pass"}, {"Role": "admin", "Pavilion / Location": "Main Secretariat", "Organization / Brand": "LoveWorld Expo Secretariat", "Assigned Cluster": "", "Booth Number": "HQ-02", "Contact Name": "Reports Supervisor", "Login Email": "supervisor@expo2026.org", "Temporary Password": "AdminExpo2026!Pass"}, {"Role": "cluster", "Pavilion / Location": "Cluster 1", "Organization / Brand": "Cluster 1", "Assigned Cluster": "", "Booth Number": "CL-01", "Contact Name": "Subchairman Cluster 1 / Secretary Cluster 1", "Login Email": "cluster1@expo2026.org", "Temporary Password": "Cluster2026!#01"}, {"Role": "cluster", "Pavilion / Location": "Cluster 2", "Organization / Brand": "Cluster 2", "Assigned Cluster": "", "Booth Number": "CL-02", "Contact Name": "Subchairman Cluster 2 / Secretary Cluster 2", "Login Email": "cluster2@expo2026.org", "Temporary Password": "Cluster2026!#02"}, {"Role": "cluster", "Pavilion / Location": "Cluster 3", "Organization / Brand": "Cluster 3", "Assigned Cluster": "", "Booth Number": "CL-03", "Contact Name": "Subchairman Cluster 3 / Secretary Cluster 3", "Login Email": "cluster3@expo2026.org", "Temporary Password": "Cluster2026!#03"}, {"Role": "cluster", "Pavilion / Location": "Cluster 4", "Organization / Brand": "Cluster 4", "Assigned Cluster": "", "Booth Number": "CL-04", "Contact Name": "Subchairman Cluster 4 / Secretary Cluster 4", "Login Email": "cluster4@expo2026.org", "Temporary Password": "Cluster2026!#04"}, {"Role": "cluster", "Pavilion / Location": "Cluster 5", "Organization / Brand": "Cluster 5", "Assigned Cluster": "", "Booth Number": "CL-05", "Contact Name": "Subchairman Cluster 5 / Secretary Cluster 5", "Login Email": "cluster5@expo2026.org", "Temporary Password": "Cluster2026!#05"}, {"Role": "cluster", "Pavilion / Location": "Cluster 6", "Organization / Brand": "Cluster 6", "Assigned Cluster": "", "Booth Number": "CL-06", "Contact Name": "Subchairman Cluster 6 / Secretary Cluster 6", "Login Email": "cluster6@expo2026.org", "Temporary Password": "Cluster2026!#06"}, {"Role": "cluster", "Pavilion / Location": "Cluster 7", "Organization / Brand": "Cluster 7", "Assigned Cluster": "", "Booth Number": "CL-07", "Contact Name": "Subchairman Cluster 7 / Secretary Cluster 7", "Login Email": "cluster7@expo2026.org", "Temporary Password": "Cluster2026!#07"}, {"Role": "cluster", "Pavilion / Location": "Cluster 8", "Organization / Brand": "Cluster 8", "Assigned Cluster": "", "Booth Number": "CL-08", "Contact Name": "Subchairman Cluster 8 / Secretary Cluster 8", "Login Email": "cluster8@expo2026.org", "Temporary Password": "Cluster2026!#08"}, {"Role": "cluster", "Pavilion / Location": "Cluster 9", "Organization / Brand": "Cluster 9", "Assigned Cluster": "", "Booth Number": "CL-09", "Contact Name": "Subchairman Cluster 9 / Secretary Cluster 9", "Login Email": "cluster9@expo2026.org", "Temporary Password": "Cluster2026!#09"}, {"Role": "cluster", "Pavilion / Location": "Cluster 10", "Organization / Brand": "Cluster 10", "Assigned Cluster": "", "Booth Number": "CL-10", "Contact Name": "Subchairman Cluster 10 / Secretary Cluster 10", "Login Email": "cluster10@expo2026.org", "Temporary Password": "Cluster2026!#10"}, {"Role": "cluster", "Pavilion / Location": "Cluster 11", "Organization / Brand": "Cluster 11", "Assigned Cluster": "", "Booth Number": "CL-11", "Contact Name": "Subchairman Cluster 11 / Secretary Cluster 11", "Login Email": "cluster11@expo2026.org", "Temporary Password": "Cluster2026!#11"}, {"Role": "cluster", "Pavilion / Location": "Cluster 12", "Organization / Brand": "Cluster 12", "Assigned Cluster": "", "Booth Number": "CL-12", "Contact Name": "Subchairman Cluster 12 / Secretary Cluster 12", "Login Email": "cluster12@expo2026.org", "Temporary Password": "Cluster2026!#12"}, {"Role": "cluster", "Pavilion / Location": "Cluster 13", "Organization / Brand": "Cluster 13", "Assigned Cluster": "", "Booth Number": "CL-13", "Contact Name": "Subchairman Cluster 13 / Secretary Cluster 13", "Login Email": "cluster13@expo2026.org", "Temporary Password": "Cluster2026!#13"}, {"Role": "cluster", "Pavilion / Location": "Cluster 14", "Organization / Brand": "Cluster 14", "Assigned Cluster": "", "Booth Number": "CL-14", "Contact Name": "Subchairman Cluster 14 / Secretary Cluster 14", "Login Email": "cluster14@expo2026.org", "Temporary Password": "Cluster2026!#14"}, {"Role": "cluster", "Pavilion / Location": "Cluster 15", "Organization / Brand": "Cluster 15", "Assigned Cluster": "", "Booth Number": "CL-15", "Contact Name": "Subchairman Cluster 15 / Secretary Cluster 15", "Login Email": "cluster15@expo2026.org", "Temporary Password": "Cluster2026!#15"}, {"Role": "cluster", "Pavilion / Location": "Cluster 16", "Organization / Brand": "Cluster 16", "Assigned Cluster": "", "Booth Number": "CL-16", "Contact Name": "Subchairman Cluster 16 / Secretary Cluster 16", "Login Email": "cluster16@expo2026.org", "Temporary Password": "Cluster2026!#16"}, {"Role": "cluster", "Pavilion / Location": "Cluster 17", "Organization / Brand": "Cluster 17", "Assigned Cluster": "", "Booth Number": "CL-17", "Contact Name": "Subchairman Cluster 17 / Secretary Cluster 17", "Login Email": "cluster17@expo2026.org", "Temporary Password": "Cluster2026!#17"}, {"Role": "cluster", "Pavilion / Location": "Cluster 18", "Organization / Brand": "Cluster 18", "Assigned Cluster": "", "Booth Number": "CL-18", "Contact Name": "Subchairman Cluster 18 / Secretary Cluster 18", "Login Email": "cluster18@expo2026.org", "Temporary Password": "Cluster2026!#18"}, {"Role": "cluster", "Pavilion / Location": "Cluster 19", "Organization / Brand": "Cluster 19", "Assigned Cluster": "", "Booth Number": "CL-19", "Contact Name": "Subchairman Cluster 19 / Secretary Cluster 19", "Login Email": "cluster19@expo2026.org", "Temporary Password": "Cluster2026!#19"}, {"Role": "cluster", "Pavilion / Location": "Cluster 20", "Organization / Brand": "Cluster 20", "Assigned Cluster": "", "Booth Number": "CL-20", "Contact Name": "Subchairman Cluster 20 / Secretary Cluster 20", "Login Email": "cluster20@expo2026.org", "Temporary Password": "Cluster2026!#20"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "360 Suite", "Assigned Cluster": "Cluster 1", "Booth Number": "P1-B01", "Contact Name": "360 Suite Representative", "Login Email": "exhibitor.360suite1@expo2026.org", "Temporary Password": "Expo2026!001"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "CeFlix Sceptre", "Assigned Cluster": "Cluster 2", "Booth Number": "P1-B02", "Contact Name": "CeFlix Sceptre Representative", "Login Email": "exhibitor.ceflixsceptr2@expo2026.org", "Temporary Password": "Expo2026!002"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "Cloudax", "Assigned Cluster": "Cluster 3", "Booth Number": "P1-B03", "Contact Name": "Cloudax Representative", "Login Email": "exhibitor.cloudax3@expo2026.org", "Temporary Password": "Expo2026!003"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "Eden Hub (Praxiom)", "Assigned Cluster": "Cluster 4", "Booth Number": "P1-B04", "Contact Name": "Eden Hub (Praxiom) Representative", "Login Email": "exhibitor.edenhubpraxi4@expo2026.org", "Temporary Password": "Expo2026!004"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "Espees", "Assigned Cluster": "Cluster 5", "Booth Number": "P1-B05", "Contact Name": "Espees Representative", "Login Email": "exhibitor.espees5@expo2026.org", "Temporary Password": "Expo2026!005"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "KingsSuite", "Assigned Cluster": "Cluster 6", "Booth Number": "P1-B06", "Contact Name": "KingsSuite Representative", "Login Email": "exhibitor.kingssuite6@expo2026.org", "Temporary Password": "Expo2026!006"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "NeoTech", "Assigned Cluster": "Cluster 7", "Booth Number": "P1-B07", "Contact Name": "NeoTech Representative", "Login Email": "exhibitor.neotech7@expo2026.org", "Temporary Password": "Expo2026!007"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "Omnia Technologies", "Assigned Cluster": "Cluster 8", "Booth Number": "P1-B08", "Contact Name": "Omnia Technologies Representative", "Login Email": "exhibitor.omniatechnol8@expo2026.org", "Temporary Password": "Expo2026!008"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "One World", "Assigned Cluster": "Cluster 9", "Booth Number": "P1-B09", "Contact Name": "One World Representative", "Login Email": "exhibitor.oneworld9@expo2026.org", "Temporary Password": "Expo2026!009"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "PCDL", "Assigned Cluster": "Cluster 10", "Booth Number": "P1-B10", "Contact Name": "PCDL Representative", "Login Email": "exhibitor.pcdl10@expo2026.org", "Temporary Password": "Expo2026!010"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "Qubators", "Assigned Cluster": "Cluster 11", "Booth Number": "P1-B11", "Contact Name": "Qubators Representative", "Login Email": "exhibitor.qubators11@expo2026.org", "Temporary Password": "Expo2026!011"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "Tsion Cars", "Assigned Cluster": "Cluster 12", "Booth Number": "P1-B12", "Contact Name": "Tsion Cars Representative", "Login Email": "exhibitor.tsioncars12@expo2026.org", "Temporary Password": "Expo2026!012"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 1 - Tech City", "Organization / Brand": "Worldstreet & Co", "Assigned Cluster": "Cluster 13", "Booth Number": "P1-B13", "Contact Name": "Worldstreet & Co Representative", "Login Email": "exhibitor.worldstreetc13@expo2026.org", "Temporary Password": "Expo2026!013"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Beverly Meals", "Assigned Cluster": "Cluster 14", "Booth Number": "P2-B01", "Contact Name": "Beverly Meals Representative", "Login Email": "exhibitor.beverlymeals14@expo2026.org", "Temporary Password": "Expo2026!014"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "BLW Campus Ministry", "Assigned Cluster": "Cluster 15", "Booth Number": "P2-B02", "Contact Name": "BLW Campus Ministry Representative", "Login Email": "exhibitor.blwcampusmin15@expo2026.org", "Temporary Password": "Expo2026!015"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "British Canadian University", "Assigned Cluster": "Cluster 16", "Booth Number": "P2-B03", "Contact Name": "British Canadian University Representative", "Login Email": "exhibitor.britishcanad16@expo2026.org", "Temporary Password": "Expo2026!016"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Bureau de Change", "Assigned Cluster": "Cluster 17", "Booth Number": "P2-B04", "Contact Name": "Bureau de Change Representative", "Login Email": "exhibitor.bureaudechan17@expo2026.org", "Temporary Password": "Expo2026!017"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Children Ministry", "Assigned Cluster": "Cluster 18", "Booth Number": "P2-B05", "Contact Name": "Children Ministry Representative", "Login Email": "exhibitor.childrenmini18@expo2026.org", "Temporary Password": "Expo2026!018"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Chris Oyakhilome Foundation International (COFI)", "Assigned Cluster": "Cluster 19", "Booth Number": "P2-B06", "Contact Name": "Chris Oyakhilome Foundation International (COFI) Representative", "Login Email": "exhibitor.chrisoyakhil19@expo2026.org", "Temporary Password": "Expo2026!019"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Church Ministry", "Assigned Cluster": "Cluster 20", "Booth Number": "P2-B07", "Contact Name": "Church Ministry Representative", "Login Email": "exhibitor.churchminist20@expo2026.org", "Temporary Password": "Expo2026!020"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Espees Corps", "Assigned Cluster": "Cluster 1", "Booth Number": "P2-B08", "Contact Name": "Espees Corps Representative", "Login Email": "exhibitor.espeescorps21@expo2026.org", "Temporary Password": "Expo2026!021"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Haven Nation", "Assigned Cluster": "Cluster 2", "Booth Number": "P2-B09", "Contact Name": "Haven Nation Representative", "Login Email": "exhibitor.havennation22@expo2026.org", "Temporary Password": "Expo2026!022"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Herald App", "Assigned Cluster": "Cluster 3", "Booth Number": "P2-B10", "Contact Name": "Herald App Representative", "Login Email": "exhibitor.heraldapp23@expo2026.org", "Temporary Password": "Expo2026!023"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Inner City Missions for Children", "Assigned Cluster": "Cluster 4", "Booth Number": "P2-B11", "Contact Name": "Inner City Missions for Children Representative", "Login Email": "exhibitor.innercitymis24@expo2026.org", "Temporary Password": "Expo2026!024"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Kiddies Media Production/Lovetoons Comic", "Assigned Cluster": "Cluster 5", "Booth Number": "P2-B12", "Contact Name": "Kiddies Media Production/Lovetoons Comic Representative", "Login Email": "exhibitor.kiddiesmedia25@expo2026.org", "Temporary Password": "Expo2026!025"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "LMAM Unending Praise", "Assigned Cluster": "Cluster 6", "Booth Number": "P2-B13", "Contact Name": "LMAM Unending Praise Representative", "Login Email": "exhibitor.lmamunending26@expo2026.org", "Temporary Password": "Expo2026!026"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Loveworld Film and Art Department", "Assigned Cluster": "Cluster 7", "Booth Number": "P2-B14", "Contact Name": "Loveworld Film and Art Department Representative", "Login Email": "exhibitor.loveworldfil27@expo2026.org", "Temporary Password": "Expo2026!027"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Loveworld Ladies Network", "Assigned Cluster": "Cluster 8", "Booth Number": "P2-B15", "Contact Name": "Loveworld Ladies Network Representative", "Login Email": "exhibitor.loveworldlad28@expo2026.org", "Temporary Password": "Expo2026!028"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Loveworld Ministry of Commerce", "Assigned Cluster": "Cluster 9", "Booth Number": "P2-B16", "Contact Name": "Loveworld Ministry of Commerce Representative", "Login Email": "exhibitor.loveworldmin29@expo2026.org", "Temporary Password": "Expo2026!029"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Loveworld Networks", "Assigned Cluster": "Cluster 10", "Booth Number": "P2-B17", "Contact Name": "Loveworld Networks Representative", "Login Email": "exhibitor.loveworldnet30@expo2026.org", "Temporary Password": "Expo2026!030"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Loveworld Schools", "Assigned Cluster": "Cluster 11", "Booth Number": "P2-B18", "Contact Name": "Loveworld Schools Representative", "Login Email": "exhibitor.loveworldsch31@expo2026.org", "Temporary Password": "Expo2026!031"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Loveworld Sports & Youth Ministry", "Assigned Cluster": "Cluster 12", "Booth Number": "P2-B19", "Contact Name": "Loveworld Sports & Youth Ministry Representative", "Login Email": "exhibitor.loveworldspo32@expo2026.org", "Temporary Password": "Expo2026!032"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Media Blast Network", "Assigned Cluster": "Cluster 13", "Booth Number": "P2-B20", "Contact Name": "Media Blast Network Representative", "Login Email": "exhibitor.mediablastne33@expo2026.org", "Temporary Password": "Expo2026!033"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Ministry of Discipleship", "Assigned Cluster": "Cluster 14", "Booth Number": "P2-B21", "Contact Name": "Ministry of Discipleship Representative", "Login Email": "exhibitor.ministryofdi34@expo2026.org", "Temporary Password": "Expo2026!034"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Ministry of Food Technology & Sovereignty", "Assigned Cluster": "Cluster 15", "Booth Number": "P2-B22", "Contact Name": "Ministry of Food Technology & Sovereignty Representative", "Login Email": "exhibitor.ministryoffo35@expo2026.org", "Temporary Password": "Expo2026!035"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Ministry of Human Resource Transformation", "Assigned Cluster": "Cluster 16", "Booth Number": "P2-B23", "Contact Name": "Ministry of Human Resource Transformation Representative", "Login Email": "exhibitor.ministryofhu36@expo2026.org", "Temporary Password": "Expo2026!036"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Ministry Programs", "Assigned Cluster": "Cluster 17", "Booth Number": "P2-B24", "Contact Name": "Ministry Programs Representative", "Login Email": "exhibitor.ministryprog37@expo2026.org", "Temporary Password": "Expo2026!037"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "New Media Ministry", "Assigned Cluster": "Cluster 18", "Booth Number": "P2-B25", "Contact Name": "New Media Ministry Representative", "Login Email": "exhibitor.newmediamini38@expo2026.org", "Temporary Password": "Expo2026!038"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Nuclear Medicine", "Assigned Cluster": "Cluster 19", "Booth Number": "P2-B26", "Contact Name": "Nuclear Medicine Representative", "Login Email": "exhibitor.nuclearmedic39@expo2026.org", "Temporary Password": "Expo2026!039"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Office of the President & CELF", "Assigned Cluster": "Cluster 20", "Booth Number": "P2-B27", "Contact Name": "Office of the President & CELF Representative", "Login Email": "exhibitor.officeofthep40@expo2026.org", "Temporary Password": "Expo2026!040"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Parallex Bank", "Assigned Cluster": "Cluster 1", "Booth Number": "P2-B28", "Contact Name": "Parallex Bank Representative", "Login Email": "exhibitor.parallexbank41@expo2026.org", "Temporary Password": "Expo2026!041"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Refuge Mortgage Bank", "Assigned Cluster": "Cluster 2", "Booth Number": "P2-B29", "Contact Name": "Refuge Mortgage Bank Representative", "Login Email": "exhibitor.refugemortga42@expo2026.org", "Temporary Password": "Expo2026!042"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "SOM (Sons of Ministry)", "Assigned Cluster": "Cluster 3", "Booth Number": "P2-B30", "Contact Name": "SOM (Sons of Ministry) Representative", "Login Email": "exhibitor.somsonsofmin43@expo2026.org", "Temporary Password": "Expo2026!043"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 2 - Ministry & Corporate", "Organization / Brand": "Spectrum Micro Finance Bank", "Assigned Cluster": "Cluster 4", "Booth Number": "P2-B31", "Contact Name": "Spectrum Micro Finance Bank Representative", "Login Email": "exhibitor.spectrummicr44@expo2026.org", "Temporary Password": "Expo2026!044"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Angel Marketplace", "Assigned Cluster": "Cluster 5", "Booth Number": "P3-B01", "Contact Name": "Angel Marketplace Representative", "Login Email": "exhibitor.angelmarketp45@expo2026.org", "Temporary Password": "Expo2026!045"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Crownelle", "Assigned Cluster": "Cluster 6", "Booth Number": "P3-B02", "Contact Name": "Crownelle Representative", "Login Email": "exhibitor.crownelle46@expo2026.org", "Temporary Password": "Expo2026!046"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Manifeston Journal & Movies", "Assigned Cluster": "Cluster 7", "Booth Number": "P3-B03", "Contact Name": "Manifeston Journal & Movies Representative", "Login Email": "exhibitor.manifestonjo47@expo2026.org", "Temporary Password": "Expo2026!047"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Meridian Translations", "Assigned Cluster": "Cluster 8", "Booth Number": "P3-B04", "Contact Name": "Meridian Translations Representative", "Login Email": "exhibitor.meridiantran48@expo2026.org", "Temporary Password": "Expo2026!048"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Reach Out Campaigns", "Assigned Cluster": "Cluster 9", "Booth Number": "P3-B05", "Contact Name": "Reach Out Campaigns Representative", "Login Email": "exhibitor.reachoutcamp49@expo2026.org", "Temporary Password": "Expo2026!049"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "REON", "Assigned Cluster": "Cluster 10", "Booth Number": "P3-B06", "Contact Name": "REON Representative", "Login Email": "exhibitor.reon50@expo2026.org", "Temporary Password": "Expo2026!050"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Rhapsody Digital Products", "Assigned Cluster": "Cluster 11", "Booth Number": "P3-B07", "Contact Name": "Rhapsody Digital Products Representative", "Login Email": "exhibitor.rhapsodydigi51@expo2026.org", "Temporary Password": "Expo2026!051"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Rhapsody Distribution Network", "Assigned Cluster": "Cluster 12", "Booth Number": "P3-B08", "Contact Name": "Rhapsody Distribution Network Representative", "Login Email": "exhibitor.rhapsodydist52@expo2026.org", "Temporary Password": "Expo2026!052"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Rhapsody Influencers Network", "Assigned Cluster": "Cluster 13", "Booth Number": "P3-B09", "Contact Name": "Rhapsody Influencers Network Representative", "Login Email": "exhibitor.rhapsodyinfl53@expo2026.org", "Temporary Password": "Expo2026!053"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Rhapsody International Missions", "Assigned Cluster": "Cluster 14", "Booth Number": "P3-B10", "Contact Name": "Rhapsody International Missions Representative", "Login Email": "exhibitor.rhapsodyinte54@expo2026.org", "Temporary Password": "Expo2026!054"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Rhapsody Kiddies Dailies with Pastor Chris", "Assigned Cluster": "Cluster 15", "Booth Number": "P3-B11", "Contact Name": "Rhapsody Kiddies Dailies with Pastor Chris Representative", "Login Email": "exhibitor.rhapsodykidd55@expo2026.org", "Temporary Password": "Expo2026!055"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Rhapsody Technologies", "Assigned Cluster": "Cluster 16", "Booth Number": "P3-B12", "Contact Name": "Rhapsody Technologies Representative", "Login Email": "exhibitor.rhapsodytech56@expo2026.org", "Temporary Password": "Expo2026!056"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Rhapsody TV", "Assigned Cluster": "Cluster 17", "Booth Number": "P3-B13", "Contact Name": "Rhapsody TV Representative", "Login Email": "exhibitor.rhapsodytv57@expo2026.org", "Temporary Password": "Expo2026!057"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "RORK", "Assigned Cluster": "Cluster 18", "Booth Number": "P3-B14", "Contact Name": "RORK Representative", "Login Email": "exhibitor.rork58@expo2026.org", "Temporary Password": "Expo2026!058"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Smile Campaign", "Assigned Cluster": "Cluster 19", "Booth Number": "P3-B15", "Contact Name": "Smile Campaign Representative", "Login Email": "exhibitor.smilecampaig59@expo2026.org", "Temporary Password": "Expo2026!059"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Tap2Read", "Assigned Cluster": "Cluster 20", "Booth Number": "P3-B16", "Contact Name": "Tap2Read Representative", "Login Email": "exhibitor.tap2read60@expo2026.org", "Temporary Password": "Expo2026!060"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Visionwear", "Assigned Cluster": "Cluster 1", "Booth Number": "P3-B17", "Contact Name": "Visionwear Representative", "Login Email": "exhibitor.visionwear61@expo2026.org", "Temporary Password": "Expo2026!061"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "Youths Aglow", "Assigned Cluster": "Cluster 2", "Booth Number": "P3-B18", "Contact Name": "Youths Aglow Representative", "Login Email": "exhibitor.youthsaglow62@expo2026.org", "Temporary Password": "Expo2026!062"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "THE GREAT COMPANY", "Assigned Cluster": "Cluster 3", "Booth Number": "P3-B19", "Contact Name": "THE GREAT COMPANY Representative", "Login Email": "exhibitor.thegreatcomp63@expo2026.org", "Temporary Password": "Expo2026!063"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "RHAPSODY BIBLES", "Assigned Cluster": "Cluster 4", "Booth Number": "P3-B20", "Contact Name": "RHAPSODY BIBLES Representative", "Login Email": "exhibitor.rhapsodybibl64@expo2026.org", "Temporary Password": "Expo2026!064"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "WONDER TV", "Assigned Cluster": "Cluster 5", "Booth Number": "P3-B21", "Contact Name": "WONDER TV Representative", "Login Email": "exhibitor.wondertv65@expo2026.org", "Temporary Password": "Expo2026!065"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "WONDERKIDS TV", "Assigned Cluster": "Cluster 6", "Booth Number": "P3-B22", "Contact Name": "WONDERKIDS TV Representative", "Login Email": "exhibitor.wonderkidstv66@expo2026.org", "Temporary Password": "Expo2026!066"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "A HERO GOES TO SCHOOL", "Assigned Cluster": "Cluster 7", "Booth Number": "P3-B23", "Contact Name": "A HERO GOES TO SCHOOL Representative", "Login Email": "exhibitor.aherogoestos67@expo2026.org", "Temporary Password": "Expo2026!067"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "SEE THROUGH A HERO", "Assigned Cluster": "Cluster 8", "Booth Number": "P3-B24", "Contact Name": "SEE THROUGH A HERO Representative", "Login Email": "exhibitor.seethroughah68@expo2026.org", "Temporary Password": "Expo2026!068"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "THE POWER OF YOUR MIND", "Assigned Cluster": "Cluster 9", "Booth Number": "P3-B25", "Contact Name": "THE POWER OF YOUR MIND Representative", "Login Email": "exhibitor.thepowerofyo69@expo2026.org", "Temporary Password": "Expo2026!069"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "HEROES AT CHRISTMAS", "Assigned Cluster": "Cluster 10", "Booth Number": "P3-B26", "Contact Name": "HEROES AT CHRISTMAS Representative", "Login Email": "exhibitor.heroesatchri70@expo2026.org", "Temporary Password": "Expo2026!070"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "LOVEWORLD CHILDREN'S PUBLISHING", "Assigned Cluster": "Cluster 11", "Booth Number": "P3-B27", "Contact Name": "LOVEWORLD CHILDREN'S PUBLISHING Representative", "Login Email": "exhibitor.loveworldchi71@expo2026.org", "Temporary Password": "Expo2026!071"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "LOVEWORLD TEENS PUBLISHING", "Assigned Cluster": "Cluster 12", "Booth Number": "P3-B28", "Contact Name": "LOVEWORLD TEENS PUBLISHING Representative", "Login Email": "exhibitor.loveworldtee72@expo2026.org", "Temporary Password": "Expo2026!072"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "LW PUBLICATIONS - THE FULL BOOK RANGE", "Assigned Cluster": "Cluster 13", "Booth Number": "P3-B29", "Contact Name": "LW PUBLICATIONS - THE FULL BOOK RANGE Representative", "Login Email": "exhibitor.lwpublicatio73@expo2026.org", "Temporary Password": "Expo2026!073"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "BIBLES IN MULTIPLE LANGUAGES AND FORMATS", "Assigned Cluster": "Cluster 14", "Booth Number": "P3-B30", "Contact Name": "BIBLES IN MULTIPLE LANGUAGES AND FORMATS Representative", "Login Email": "exhibitor.biblesinmult74@expo2026.org", "Temporary Password": "Expo2026!074"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 3 - Angel Court", "Organization / Brand": "LIFESTYLE AND PERSONAL CARE PRODUCTS", "Assigned Cluster": "Cluster 15", "Booth Number": "P3-B31", "Contact Name": "LIFESTYLE AND PERSONAL CARE PRODUCTS Representative", "Login Email": "exhibitor.lifestyleand75@expo2026.org", "Temporary Password": "Expo2026!075"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Advanced School of Technology", "Assigned Cluster": "Cluster 16", "Booth Number": "P4-B01", "Contact Name": "Advanced School of Technology Representative", "Login Email": "exhibitor.advancedscho76@expo2026.org", "Temporary Password": "Expo2026!076"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Chris Oyakhilome Foundation International (COFI - Health)", "Assigned Cluster": "Cluster 17", "Booth Number": "P4-B02", "Contact Name": "Chris Oyakhilome Foundation International (COFI - Health) Representative", "Login Email": "exhibitor.chrisoyakhil77@expo2026.org", "Temporary Password": "Expo2026!077"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Directorate of Health Services", "Assigned Cluster": "Cluster 18", "Booth Number": "P4-B03", "Contact Name": "Directorate of Health Services Representative", "Login Email": "exhibitor.directorateo78@expo2026.org", "Temporary Password": "Expo2026!078"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Directorate of Social Services", "Assigned Cluster": "Cluster 19", "Booth Number": "P4-B04", "Contact Name": "Directorate of Social Services Representative", "Login Email": "exhibitor.directorateo79@expo2026.org", "Temporary Password": "Expo2026!079"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Future Africa Leaders Foundation (FALF)", "Assigned Cluster": "Cluster 20", "Booth Number": "P4-B05", "Contact Name": "Future Africa Leaders Foundation (FALF) Representative", "Login Email": "exhibitor.futureafrica80@expo2026.org", "Temporary Password": "Expo2026!080"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Global Youth Leaders Forum (GYLF)", "Assigned Cluster": "Cluster 1", "Booth Number": "P4-B06", "Contact Name": "Global Youth Leaders Forum (GYLF) Representative", "Login Email": "exhibitor.globalyouthl81@expo2026.org", "Temporary Password": "Expo2026!081"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Healing School", "Assigned Cluster": "Cluster 2", "Booth Number": "P4-B07", "Contact Name": "Healing School Representative", "Login Email": "exhibitor.healingschoo82@expo2026.org", "Temporary Password": "Expo2026!082"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "International School of Ministry (ISM)", "Assigned Cluster": "Cluster 3", "Booth Number": "P4-B08", "Contact Name": "International School of Ministry (ISM) Representative", "Login Email": "exhibitor.internationa83@expo2026.org", "Temporary Password": "Expo2026!083"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Leaders School of Ministry (LSM)", "Assigned Cluster": "Cluster 4", "Booth Number": "P4-B09", "Contact Name": "Leaders School of Ministry (LSM) Representative", "Login Email": "exhibitor.leadersschoo84@expo2026.org", "Temporary Password": "Expo2026!084"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Licht Marketing", "Assigned Cluster": "Cluster 5", "Booth Number": "P4-B10", "Contact Name": "Licht Marketing Representative", "Login Email": "exhibitor.lichtmarketi85@expo2026.org", "Temporary Password": "Expo2026!085"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Loveworld Medical Center", "Assigned Cluster": "Cluster 6", "Booth Number": "P4-B11", "Contact Name": "Loveworld Medical Center Representative", "Login Email": "exhibitor.loveworldmed86@expo2026.org", "Temporary Password": "Expo2026!086"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Loveworld Medical Foundation (LMF)", "Assigned Cluster": "Cluster 7", "Booth Number": "P4-B12", "Contact Name": "Loveworld Medical Foundation (LMF) Representative", "Login Email": "exhibitor.loveworldmed87@expo2026.org", "Temporary Password": "Expo2026!087"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Marpe Wellness", "Assigned Cluster": "Cluster 8", "Booth Number": "P4-B13", "Contact Name": "Marpe Wellness Representative", "Login Email": "exhibitor.marpewellnes88@expo2026.org", "Temporary Password": "Expo2026!088"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Ministry of Humanitarian Affairs", "Assigned Cluster": "Cluster 9", "Booth Number": "P4-B14", "Contact Name": "Ministry of Humanitarian Affairs Representative", "Login Email": "exhibitor.ministryofhu89@expo2026.org", "Temporary Password": "Expo2026!089"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Neo Tech Hub", "Assigned Cluster": "Cluster 10", "Booth Number": "P4-B15", "Contact Name": "Neo Tech Hub Representative", "Login Email": "exhibitor.neotechhub90@expo2026.org", "Temporary Password": "Expo2026!090"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Nuclear Medicine Museum", "Assigned Cluster": "Cluster 11", "Booth Number": "P4-B16", "Contact Name": "Nuclear Medicine Museum Representative", "Login Email": "exhibitor.nuclearmedic91@expo2026.org", "Temporary Password": "Expo2026!091"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 4 - Healing Dome", "Organization / Brand": "Pastoral Deaconry Nominees Training Program (PDNTP)", "Assigned Cluster": "Cluster 12", "Booth Number": "P4-B17", "Contact Name": "Pastoral Deaconry Nominees Training Program (PDNTP) Representative", "Login Email": "exhibitor.pastoraldeac92@expo2026.org", "Temporary Password": "Expo2026!092"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Kelsey Greene Group of Companies", "Assigned Cluster": "Cluster 13", "Booth Number": "P5-B01", "Contact Name": "Kelsey Greene Group of Companies Representative", "Login Email": "exhibitor.kelseygreene93@expo2026.org", "Temporary Password": "Expo2026!093"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Nazer Company Limited", "Assigned Cluster": "Cluster 14", "Booth Number": "P5-B02", "Contact Name": "Nazer Company Limited Representative", "Login Email": "exhibitor.nazercompany94@expo2026.org", "Temporary Password": "Expo2026!094"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Prime Foods and Beverages Nigeria Limited", "Assigned Cluster": "Cluster 15", "Booth Number": "P5-B03", "Contact Name": "Prime Foods and Beverages Nigeria Limited Representative", "Login Email": "exhibitor.primefoodsan95@expo2026.org", "Temporary Password": "Expo2026!095"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Forever Loveworld", "Assigned Cluster": "Cluster 16", "Booth Number": "P5-B04", "Contact Name": "Forever Loveworld Representative", "Login Email": "exhibitor.foreverlovew96@expo2026.org", "Temporary Password": "Expo2026!096"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "MadeInHeaven", "Assigned Cluster": "Cluster 17", "Booth Number": "P5-B05", "Contact Name": "MadeInHeaven Representative", "Login Email": "exhibitor.madeinheaven97@expo2026.org", "Temporary Password": "Expo2026!097"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Eden Glow", "Assigned Cluster": "Cluster 18", "Booth Number": "P5-B06", "Contact Name": "Eden Glow Representative", "Login Email": "exhibitor.edenglow98@expo2026.org", "Temporary Password": "Expo2026!098"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "House of Seraph", "Assigned Cluster": "Cluster 19", "Booth Number": "P5-B07", "Contact Name": "House of Seraph Representative", "Login Email": "exhibitor.houseofserap99@expo2026.org", "Temporary Password": "Expo2026!099"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "OCA Services", "Assigned Cluster": "Cluster 20", "Booth Number": "P5-B08", "Contact Name": "OCA Services Representative", "Login Email": "exhibitor.ocaservices100@expo2026.org", "Temporary Password": "Expo2026!100"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Elenchos Consulting Limited", "Assigned Cluster": "Cluster 1", "Booth Number": "P5-B09", "Contact Name": "Elenchos Consulting Limited Representative", "Login Email": "exhibitor.elenchoscons101@expo2026.org", "Temporary Password": "Expo2026!101"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Cedar and Cradle Limited", "Assigned Cluster": "Cluster 2", "Booth Number": "P5-B10", "Contact Name": "Cedar and Cradle Limited Representative", "Login Email": "exhibitor.cedarandcrad102@expo2026.org", "Temporary Password": "Expo2026!102"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Shares Service Limited", "Assigned Cluster": "Cluster 3", "Booth Number": "P5-B11", "Contact Name": "Shares Service Limited Representative", "Login Email": "exhibitor.sharesservic103@expo2026.org", "Temporary Password": "Expo2026!103"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Norah Mining Limited", "Assigned Cluster": "Cluster 4", "Booth Number": "P5-B12", "Contact Name": "Norah Mining Limited Representative", "Login Email": "exhibitor.norahminingl104@expo2026.org", "Temporary Password": "Expo2026!104"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Licht Group", "Assigned Cluster": "Cluster 5", "Booth Number": "P5-B13", "Contact Name": "Licht Group Representative", "Login Email": "exhibitor.lichtgroup105@expo2026.org", "Temporary Password": "Expo2026!105"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Auxano", "Assigned Cluster": "Cluster 6", "Booth Number": "P5-B14", "Contact Name": "Auxano Representative", "Login Email": "exhibitor.auxano106@expo2026.org", "Temporary Password": "Expo2026!106"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Pointek", "Assigned Cluster": "Cluster 7", "Booth Number": "P5-B15", "Contact Name": "Pointek Representative", "Login Email": "exhibitor.pointek107@expo2026.org", "Temporary Password": "Expo2026!107"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Parallex Bank (Marketplace)", "Assigned Cluster": "Cluster 8", "Booth Number": "P5-B16", "Contact Name": "Parallex Bank (Marketplace) Representative", "Login Email": "exhibitor.parallexbank108@expo2026.org", "Temporary Password": "Expo2026!108"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Fashion Redemption", "Assigned Cluster": "Cluster 9", "Booth Number": "P5-B17", "Contact Name": "Fashion Redemption Representative", "Login Email": "exhibitor.fashionredem109@expo2026.org", "Temporary Password": "Expo2026!109"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Home World Supermarket", "Assigned Cluster": "Cluster 10", "Booth Number": "P5-B18", "Contact Name": "Home World Supermarket Representative", "Login Email": "exhibitor.homeworldsup110@expo2026.org", "Temporary Password": "Expo2026!110"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Dolly Nation Kayla's Castle", "Assigned Cluster": "Cluster 11", "Booth Number": "P5-B19", "Contact Name": "Dolly Nation Kayla's Castle Representative", "Login Email": "exhibitor.dollynationk111@expo2026.org", "Temporary Password": "Expo2026!111"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Celebrity Style", "Assigned Cluster": "Cluster 12", "Booth Number": "P5-B20", "Contact Name": "Celebrity Style Representative", "Login Email": "exhibitor.celebritysty112@expo2026.org", "Temporary Password": "Expo2026!112"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Fashion Redemption Print", "Assigned Cluster": "Cluster 13", "Booth Number": "P5-B21", "Contact Name": "Fashion Redemption Print Representative", "Login Email": "exhibitor.fashionredem113@expo2026.org", "Temporary Password": "Expo2026!113"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Jazari", "Assigned Cluster": "Cluster 14", "Booth Number": "P5-B22", "Contact Name": "Jazari Representative", "Login Email": "exhibitor.jazari114@expo2026.org", "Temporary Password": "Expo2026!114"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Yummilicious Pizza", "Assigned Cluster": "Cluster 15", "Booth Number": "P5-B23", "Contact Name": "Yummilicious Pizza Representative", "Login Email": "exhibitor.yummilicious115@expo2026.org", "Temporary Password": "Expo2026!115"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Beverly Restaurant", "Assigned Cluster": "Cluster 16", "Booth Number": "P5-B24", "Contact Name": "Beverly Restaurant Representative", "Login Email": "exhibitor.beverlyresta116@expo2026.org", "Temporary Password": "Expo2026!116"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Kiddies Corner", "Assigned Cluster": "Cluster 17", "Booth Number": "P5-B25", "Contact Name": "Kiddies Corner Representative", "Login Email": "exhibitor.kiddiescorne117@expo2026.org", "Temporary Password": "Expo2026!117"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Omnia Health", "Assigned Cluster": "Cluster 18", "Booth Number": "P5-B26", "Contact Name": "Omnia Health Representative", "Login Email": "exhibitor.omniahealth118@expo2026.org", "Temporary Password": "Expo2026!118"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Omnia Eye Clinic", "Assigned Cluster": "Cluster 19", "Booth Number": "P5-B27", "Contact Name": "Omnia Eye Clinic Representative", "Login Email": "exhibitor.omniaeyeclin119@expo2026.org", "Temporary Password": "Expo2026!119"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Cappelli Hair Salon", "Assigned Cluster": "Cluster 20", "Booth Number": "P5-B28", "Contact Name": "Cappelli Hair Salon Representative", "Login Email": "exhibitor.cappellihair120@expo2026.org", "Temporary Password": "Expo2026!120"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "All Natural", "Assigned Cluster": "Cluster 1", "Booth Number": "P5-B29", "Contact Name": "All Natural Representative", "Login Email": "exhibitor.allnatural121@expo2026.org", "Temporary Password": "Expo2026!121"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Complete Studio", "Assigned Cluster": "Cluster 2", "Booth Number": "P5-B30", "Contact Name": "Complete Studio Representative", "Login Email": "exhibitor.completestud122@expo2026.org", "Temporary Password": "Expo2026!122"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "The Wash Spot", "Assigned Cluster": "Cluster 3", "Booth Number": "P5-B31", "Contact Name": "The Wash Spot Representative", "Login Email": "exhibitor.thewashspot123@expo2026.org", "Temporary Password": "Expo2026!123"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Event Centre", "Assigned Cluster": "Cluster 4", "Booth Number": "P5-B32", "Contact Name": "Event Centre Representative", "Login Email": "exhibitor.eventcentre124@expo2026.org", "Temporary Password": "Expo2026!124"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Azers Cinema", "Assigned Cluster": "Cluster 5", "Booth Number": "P5-B33", "Contact Name": "Azers Cinema Representative", "Login Email": "exhibitor.azerscinema125@expo2026.org", "Temporary Password": "Expo2026!125"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Miniso", "Assigned Cluster": "Cluster 6", "Booth Number": "P5-B34", "Contact Name": "Miniso Representative", "Login Email": "exhibitor.miniso126@expo2026.org", "Temporary Password": "Expo2026!126"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Sharer's Suite of Shops", "Assigned Cluster": "Cluster 7", "Booth Number": "P5-B35", "Contact Name": "Sharer's Suite of Shops Representative", "Login Email": "exhibitor.sharerssuite127@expo2026.org", "Temporary Password": "Expo2026!127"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Spectrum Microfinance Bank (Marketplace)", "Assigned Cluster": "Cluster 8", "Booth Number": "P5-B36", "Contact Name": "Spectrum Microfinance Bank (Marketplace) Representative", "Login Email": "exhibitor.spectrummicr128@expo2026.org", "Temporary Password": "Expo2026!128"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "The Play Arena", "Assigned Cluster": "Cluster 9", "Booth Number": "P5-B37", "Contact Name": "The Play Arena Representative", "Login Email": "exhibitor.theplayarena129@expo2026.org", "Temporary Password": "Expo2026!129"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Omnia Tech World", "Assigned Cluster": "Cluster 10", "Booth Number": "P5-B38", "Contact Name": "Omnia Tech World Representative", "Login Email": "exhibitor.omniatechwor130@expo2026.org", "Temporary Password": "Expo2026!130"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "CWE Bistro", "Assigned Cluster": "Cluster 11", "Booth Number": "P5-B39", "Contact Name": "CWE Bistro Representative", "Login Email": "exhibitor.cwebistro131@expo2026.org", "Temporary Password": "Expo2026!131"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "CWE Supermarket", "Assigned Cluster": "Cluster 12", "Booth Number": "P5-B40", "Contact Name": "CWE Supermarket Representative", "Login Email": "exhibitor.cwesupermark132@expo2026.org", "Temporary Password": "Expo2026!132"}, {"Role": "exhibitor", "Pavilion / Location": "Pavilion 5 - Marketplace", "Organization / Brand": "Tummy's Cafe", "Assigned Cluster": "Cluster 13", "Booth Number": "P5-B41", "Contact Name": "Tummy's Cafe Representative", "Login Email": "exhibitor.tummyscafe133@expo2026.org", "Temporary Password": "Expo2026!133"}];
+
+    function parseCSV(text) {
+      var lines = [];
+      var row = [];
+      var curr = '';
+      var insideQuotes = false;
+      for (var i = 0; i < text.length; i++) {
+        var c = text[i];
+        var next = text[i + 1];
+        if (c === '"') {
+          if (insideQuotes && next === '"') {
+            curr += '"';
+            i++;
+          } else {
+            insideQuotes = !insideQuotes;
+          }
+        } else if (c === ',' && !insideQuotes) {
+          row.push(curr);
+          curr = '';
+        } else if ((c === '\r' || c === '\n') && !insideQuotes) {
+          if (c === '\r' && next === '\n') i++;
+          row.push(curr);
+          curr = '';
+          if (row.length > 1 || (row.length === 1 && row[0].trim() !== '')) {
+            lines.push(row);
+          }
+          row = [];
+        } else {
+          curr += c;
+        }
+      }
+      if (curr.length > 0 || row.length > 0) {
+        row.push(curr);
+        if (row.length > 1 || (row.length === 1 && row[0].trim() !== '')) {
+          lines.push(row);
+        }
+      }
+      if (lines.length === 0) return [];
+      var headers = lines[0].map(function(h) { return h.trim(); });
+      var result = [];
+      for (var j = 1; j < lines.length; j++) {
+        var r = lines[j];
+        if (r.length < 2 && (r[0] || '').trim() === '') continue;
+        var obj = {};
+        for (var k = 0; k < headers.length; k++) {
+          obj[headers[k]] = (r[k] !== undefined ? r[k].trim() : '');
+        }
+        result.push(obj);
+      }
+      return result;
+    }
+
+    function extractGoogleSheetId(urlOrId) {
+      if (!urlOrId) return DEFAULT_SHEET_ID;
+      var match = urlOrId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      return match ? match[1] : urlOrId.trim();
+    }
+
+    async function syncGoogleSheetCredentials() {
+      var savedUrl = localStorage.getItem('expo_google_sheet_url') || DEFAULT_SHEET_URL;
+      var sheetId = extractGoogleSheetId(savedUrl);
+      var gvizUrl = 'https://docs.google.com/spreadsheets/d/' + sheetId + '/gviz/tq?tqx=out:csv&t=' + Date.now();
+      
+      try {
+        var res = await fetch(gvizUrl);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var csvData = await res.text();
+        var parsed = parseCSV(csvData);
+        if (parsed && parsed.length > 0) {
+          cachedAccounts = parsed;
+          localStorage.setItem('expo_cached_accounts', JSON.stringify(parsed));
+          var countEl = document.getElementById('sheetCountLabel');
+          if (countEl) countEl.textContent = '(' + parsed.length + ' accounts live)';
+          return parsed;
+        }
+      } catch (err) {
+        console.warn('Google Sheet live sync notice (using cached data):', err);
+        var savedCache = localStorage.getItem('expo_cached_accounts');
+        if (savedCache) {
+          try { cachedAccounts = JSON.parse(savedCache); } catch(e) {}
+        }
+      }
+      return cachedAccounts;
+    }
+
+    // Trigger initial background sync
+    setTimeout(function() {
+      syncGoogleSheetCredentials();
+    }, 500);
+
+    function showLoginError(msg) {
+      var errEl = document.getElementById('loginErrorMessage');
+      if (errEl) {
+        errEl.textContent = msg;
+        errEl.classList.remove('hidden');
+      } else {
+        alert(msg);
+      }
+    }
+
+    function clearLoginError() {
+      var errEl = document.getElementById('loginErrorMessage');
+      if (errEl) {
+        errEl.textContent = '';
+        errEl.classList.add('hidden');
+      }
+    }
+
+    function handleLogout() {
+      currentUser = null;
+      localStorage.removeItem('expo_current_user');
+      document.getElementById('appNav').style.display = 'none';
+      document.getElementById('exhibitorSection').style.display = 'none';
+      document.getElementById('clusterSection').style.display = 'none';
+      document.getElementById('adminSection').style.display = 'none';
+      document.getElementById('loginSection').style.display = 'flex';
+      document.getElementById('loginSection').classList.remove('hidden');
+      clearLoginError();
+    }
+
+    async function handleManualLogin(e) {
+      e.preventDefault();
+      clearLoginError();
+
+      var emailInput = document.getElementById('loginEmail');
+      var passInput = document.getElementById('loginPassword');
+      var submitBtn = document.getElementById('loginSubmitBtn');
+
+      var email = (emailInput.value || '').trim().toLowerCase();
+      var password = (passInput.value || '').trim();
+
+      if (!email || !password) {
+        showLoginError('Please enter both your login email and password.');
+        return;
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Verifying with Google Sheet...';
+      }
+
+      // Fetch latest accounts directly from Google Sheet
+      var accountsList = await syncGoogleSheetCredentials();
+      if (!accountsList || accountsList.length === 0) accountsList = cachedAccounts;
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign In with Email';
+      }
+
+      // Locate account by Login Email, Organization name, or Booth Number
+      var query = email.replace(/\s+/g, ' ').toLowerCase();
+      var queryNoSpace = email.replace(/\s+/g, '').toLowerCase();
+      var matched = accountsList.find(function(acc) {
+        var aEmail = (acc['Login Email'] || '').trim().toLowerCase();
+        var aOrg = (acc['Organization / Brand'] || '').trim().toLowerCase();
+        var aOrgNoSpace = aOrg.replace(/\s+/g, '');
+        var aBooth = (acc['Booth Number'] || '').trim().toLowerCase();
+        return aEmail === query || aOrg === query || aOrgNoSpace === queryNoSpace || aBooth === query;
+      });
+
+      if (!matched) {
+        showLoginError('No account found for "' + email + '". Please verify the address against the Google Sheet.');
+        return;
+      }
+
+      var expectedPassword = (matched['Temporary Password'] || '').trim();
+      if (expectedPassword && password !== expectedPassword) {
+        showLoginError('Incorrect password for ' + email + '. Please check your assigned password in the Google Sheet.');
+        return;
+      }
+
+      // Authenticated! Configure user session from Google Sheet data
+      var role = (matched['Role'] || 'exhibitor').trim().toLowerCase();
+      currentUser = {
+        id: (matched['Booth Number'] || matched['Login Email']).replace(/[^a-zA-Z0-9]/g, '_'),
+        email: matched['Login Email'],
+        name: matched['Contact Name'] || matched['Organization / Brand'],
+        role: role,
+        org: matched['Organization / Brand'] || matched['Contact Name'],
+        location: matched['Booth Number'] ? 'Booth ' + matched['Booth Number'] : (matched['Pavilion / Location'] || 'Expo Venue'),
+        pavilion: matched['Pavilion / Location'] || '',
+        cluster_name: matched['Assigned Cluster'] || (role === 'cluster' ? matched['Organization / Brand'] : 'Cluster 1'),
+        subchairman: matched['Contact Name'] || '',
+        secretary: ''
+      };
+
+      localStorage.setItem('expo_current_user', JSON.stringify(currentUser));
+
+      // Switch view to user portal
+      var loginSec = document.getElementById('loginSection');
+      if (loginSec) {
+        loginSec.style.display = 'none';
+        loginSec.classList.add('hidden');
+      }
+
+      var nav = document.getElementById('appNav');
+      if (nav) {
+        nav.style.display = 'block';
+        nav.classList.remove('hidden');
+      }
+
+      var nameEl = document.getElementById('userNameDisplay');
+      var roleEl = document.getElementById('userRoleBadge');
+      var locEl = document.getElementById('userLocationDisplay');
+      if (nameEl) nameEl.textContent = currentUser.org || currentUser.name;
+      if (roleEl) roleEl.textContent = currentUser.role.toUpperCase();
+      if (locEl) locEl.textContent = currentUser.location;
+
+      var exSec = document.getElementById('exhibitorSection');
+      var clSec = document.getElementById('clusterSection');
+      var adSec = document.getElementById('adminSection');
+
+      if (exSec) { exSec.style.display = 'none'; exSec.classList.add('hidden'); }
+      if (clSec) { clSec.style.display = 'none'; clSec.classList.add('hidden'); }
+      if (adSec) { adSec.style.display = 'none'; adSec.classList.add('hidden'); }
+
+      if (currentUser.role === 'admin') {
+        if (adSec) { adSec.style.display = 'block'; adSec.classList.remove('hidden'); }
+        if (typeof window.setupAdminPortal === 'function') window.setupAdminPortal();
+      } else if (currentUser.role === 'cluster') {
+        if (clSec) { clSec.style.display = 'block'; clSec.classList.remove('hidden'); }
+        if (typeof window.setupClusterPortal === 'function') window.setupClusterPortal();
+      } else {
+        if (exSec) { exSec.style.display = 'block'; exSec.classList.remove('hidden'); }
+        if (typeof window.setupExhibitorPortal === 'function') window.setupExhibitorPortal();
+      }
+
+      window.scrollTo(0, 0);
+    }
+
+
+    // --- EXHIBITOR LOGIC ---
+    window.setupExhibitorPortal = function() {
+      document.getElementById('exhibitorOrgName').textContent = currentUser.org;
+      document.getElementById('exhibitorBoothHeader').textContent = currentUser.location;
+      document.getElementById('exhibitorClusterPavilion').textContent = (currentUser.pavilion || 'Exhibition Pavilion') + ' • Assigned to ' + (currentUser.cluster_name || 'Cluster 1');
+
+      renderExhibitorProducts();
+      renderExhibitorHistory();
+      renderExhibitorAnalytics();
+      switchExhibitorTab('report');
+    };
+
+    function switchExhibitorTab(tabName) {
+      var rTab = document.getElementById('exhibitorReportTab');
+      var aTab = document.getElementById('exhibitorAnalyticsTab');
+      var hTab = document.getElementById('exhibitorHistoryTab');
+      var pTab = document.getElementById('exhibitorProductsTab');
+      
+      if (rTab) rTab.style.display = tabName === 'report' ? 'block' : 'none';
+      if (aTab) aTab.style.display = tabName === 'analytics' ? 'block' : 'none';
+      if (hTab) hTab.style.display = tabName === 'history' ? 'block' : 'none';
+      if (pTab) pTab.style.display = tabName === 'products' ? 'block' : 'none';
+
+      var setBtn = function(id, active) {
+        var el = document.getElementById(id);
+        if (el) {
+          el.className = active 
+            ? "px-4 py-2 rounded-xl text-xs font-bold bg-white text-blue-900 shadow-sm transition cursor-pointer"
+            : "px-4 py-2 rounded-xl text-xs font-bold bg-blue-800/80 hover:bg-white/20 text-white transition cursor-pointer";
+        }
+      };
+      setBtn('tabBtnReport', tabName === 'report');
+      setBtn('tabBtnAnalytics', tabName === 'analytics');
+      setBtn('tabBtnHistory', tabName === 'history');
+      setBtn('tabBtnProducts', tabName === 'products');
+
+      if (tabName === 'analytics') {
+        renderExhibitorAnalytics();
+      } else if (tabName === 'history') {
+        renderExhibitorHistory();
+      } else if (tabName === 'products') {
+        renderExhibitorProducts();
+      }
+    }
+
+
+    function getMyExhibitorReports() {
+      exhibitorReports = getStore('exhibitor_reports', exhibitorReports);
+      if (!currentUser) return [];
+      var curEmail = (currentUser.email || '').trim().toLowerCase();
+      var curOrg = (currentUser.org || '').trim().toLowerCase();
+      return exhibitorReports.filter(function(r) {
+        var rEmail = (r.user_email || '').trim().toLowerCase();
+        var rOrg = (r.org_name || '').trim().toLowerCase();
+        return (curEmail && rEmail === curEmail) || (curOrg && rOrg === curOrg);
+      });
+    }
+
+    function getMyClusterReports() {
+      clusterReports = getStore('cluster_reports', clusterReports);
+      if (!currentUser) return [];
+      var curEmail = (currentUser.email || '').trim().toLowerCase();
+      var curOrg = (currentUser.org || '').trim().toLowerCase();
+      return clusterReports.filter(function(r) {
+        var rEmail = (r.user_email || '').trim().toLowerCase();
+        var rCluster = (r.cluster_name || '').trim().toLowerCase();
+        return (curEmail && rEmail === curEmail) || (curOrg && rCluster === curOrg);
+      });
+    }
+    function renderExhibitorAnalytics() {
+      var myReports = getMyExhibitorReports();
+      var totVis = myReports.reduce(function(acc, r) { return acc + (r.visitors_count || 0); }, 0);
+      var totEng = myReports.reduce(function(acc, r) { return acc + (r.engagements || 0); }, 0);
+      var totConv = myReports.reduce(function(acc, r) { return acc + (r.conversions || 0); }, 0);
+      var overallRate = totEng > 0 ? ((totConv / totEng) * 100).toFixed(2) + '%' : '0.00%';
+
+      var vEl = document.getElementById('exStatVisitors');
+      var eEl = document.getElementById('exStatEngagements');
+      var cEl = document.getElementById('exStatConversions');
+      var rEl = document.getElementById('exStatRate');
+
+      if (vEl) vEl.textContent = totVis.toLocaleString();
+      if (eEl) eEl.textContent = totEng.toLocaleString();
+      if (cEl) cEl.textContent = totConv.toLocaleString();
+      if (rEl) rEl.textContent = overallRate;
+
+      if (!window.Chart) return;
+
+      var days = myReports.map(function(r) { return r.day; }).reverse();
+      var visData = myReports.map(function(r) { return r.visitors_count; }).reverse();
+      var engData = myReports.map(function(r) { return r.engagements; }).reverse();
+      var convData = myReports.map(function(r) { return r.conversions; }).reverse();
+
+      if (days.length === 0) {
+        days = ['Day 1'];
+        visData = [0];
+        engData = [0];
+        convData = [0];
+      }
+
+      var ctxTrend = document.getElementById('exhibitorTrendChart');
+      if (ctxTrend) {
+        if (exhibitorTrendChart) exhibitorTrendChart.destroy();
+        exhibitorTrendChart = new Chart(ctxTrend.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: days,
+            datasets: [
+              { label: 'Visitors', data: visData, borderColor: '#1d4ed8', backgroundColor: 'rgba(29, 78, 216, 0.1)', fill: true, tension: 0.3 },
+              { label: 'Engagements', data: engData, borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', fill: true, tension: 0.3 }
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+
+      var ctxConv = document.getElementById('exhibitorConvChart');
+      if (ctxConv) {
+        if (exhibitorConvChart) exhibitorConvChart.destroy();
+        exhibitorConvChart = new Chart(ctxConv.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: days,
+            datasets: [{ label: 'Conversions', data: convData, backgroundColor: '#10b981', borderRadius: 6 }]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+    }
+
+    function updateExhibitorRate() {
+      var eng = parseFloat(document.getElementById('exEngagementsCount').value) || 0;
+      var conv = parseFloat(document.getElementById('exConversionsCount').value) || 0;
+      var rateEl = document.getElementById('exConversionRate');
+      if (eng > 0) {
+        rateEl.value = ((conv / eng) * 100).toFixed(2) + '%';
+      } else {
+        rateEl.value = '0.00%';
+      }
+    }
+
+    function getMyProducts() {
+      return exhibitorProducts[currentUser.email] || [
+        { id: "p1", name: currentUser.org + " Solution Suite", active: true },
+        { id: "p2", name: currentUser.org + " Enterprise Service", active: true }
+      ];
+    }
+
+    function renderExhibitorProducts() {
+      var products = getMyProducts();
+      exhibitorProducts[currentUser.email] = products;
+      setStore('products', exhibitorProducts);
+
+      var tbody = document.getElementById('catalogTableBody');
+      if (tbody) {
+        tbody.innerHTML = products.map(function(p, i) {
+          return '<tr>' +
+            '<td class="py-3 px-4 font-semibold text-slate-400">' + (i + 1) + '</td>' +
+            '<td class="py-3 px-4 font-bold text-slate-900">' + p.name + '</td>' +
+            '<td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Active</span></td>' +
+            '<td class="py-3 px-4 text-right"><button type="button" onclick="removeProduct(\'' + p.id + '\')" class="text-rose-500 hover:text-rose-700 text-xs font-semibold cursor-pointer">Remove</button></td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      var chips = document.getElementById('exhibitorProductsListContainer');
+      if (chips) {
+        chips.innerHTML = products.map(function(p) {
+          return '<label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-white text-xs font-semibold text-slate-800 hover:bg-blue-50 cursor-pointer shadow-xs">' +
+            '<input type="checkbox" name="exProduct" value="' + p.name + '" class="rounded text-blue-600" checked> ' +
+            '<span>' + p.name + '</span>' +
+          '</label>';
+        }).join('');
+      }
+
+      var select = document.getElementById('exMostEngagedSelect');
+      if (select) {
+        select.innerHTML = '<option value="">Select the top engaged product...</option>' +
+          products.map(function(p) {
+            return '<option value="' + p.name + '">' + p.name + '</option>';
+          }).join('');
+      }
+    }
+
+    function handleAddProductSubmit(e) {
+      e.preventDefault();
+      var input = document.getElementById('newProductName');
+      var name = (input.value || '').trim();
+      if (!name) return;
+
+      var products = getMyProducts();
+      products.push({ id: 'p_' + Date.now(), name: name, active: true });
+      exhibitorProducts[currentUser.email] = products;
+      setStore('products', exhibitorProducts);
+      input.value = '';
+      renderExhibitorProducts();
+      alert('Product "' + name + '" added to your catalog!');
+    }
+
+    function removeProduct(id) {
+      var products = getMyProducts().filter(function(p) { return p.id !== id; });
+      exhibitorProducts[currentUser.email] = products;
+      setStore('products', exhibitorProducts);
+      renderExhibitorProducts();
+    }
+
+    function handlePhotoUpload(e) {
+      var files = Array.from(e.target.files);
+      var container = document.getElementById('exPhotoPreviewContainer');
+      files.forEach(function(f) {
+        var reader = new FileReader();
+        reader.onload = function(evt) {
+          exhibitorPhotosBuffer.push(evt.target.result);
+          if (container) {
+            container.innerHTML += '<img src="' + evt.target.result + '" class="w-12 h-12 rounded object-cover border border-slate-200">';
+          }
+        };
+        reader.readAsDataURL(f);
+      });
+    }
+
+    function handleExhibitorSubmit(e) {
+      e.preventDefault();
+      var checked = Array.from(document.querySelectorAll('input[name="exProduct"]:checked')).map(function(el) { return el.value; });
+      if (checked.length === 0) {
+        alert('Please check at least one product exhibited today.');
+        return;
+      }
+
+      var report = {
+        id: 'rep_' + Date.now(),
+        user_email: currentUser.email,
+        org_name: currentUser.org,
+        booth: currentUser.location,
+        pavilion: currentUser.pavilion,
+        day: document.getElementById('exhibitorDaySelect').value,
+        staff_count: parseInt(document.getElementById('exStaffCount').value) || 0,
+        visitors_count: parseInt(document.getElementById('exVisitorsCount').value) || 0,
+        dignitaries: document.getElementById('exDignitaries').value.trim(),
+        products_exhibited: checked,
+        most_engaged: document.getElementById('exMostEngagedSelect').value,
+        engagements: parseInt(document.getElementById('exEngagementsCount').value) || 0,
+        conversions: parseInt(document.getElementById('exConversionsCount').value) || 0,
+        conversion_rate: document.getElementById('exConversionRate').value,
+        deals: document.getElementById('exDealsSecured').value.trim(),
+        new_requests: document.getElementById('exNewRequests').value.trim(),
+        key_observations: document.getElementById('exKeyObservations').value.trim(),
+        challenges: document.getElementById('exChallenges').value.trim(),
+        improvements: document.getElementById('exImprovements').value.trim(),
+        pictures: exhibitorPhotosBuffer,
+        video_url: document.getElementById('exVideoUrl').value.trim(),
+        status: 'submitted',
+        admin_feedback: null,
+        created_at: new Date().toISOString()
+      };
+
+      exhibitorReports.unshift(report);
+      setStore('exhibitor_reports', exhibitorReports);
+
+      // LIVE SUPABASE SYNC
+      if (supabaseClient) {
+        supabaseClient.from('exhibitor_daily_reports').insert([{
+          exhibition_day: report.day,
+          staff_count: report.staff_count,
+          visitors_count: report.visitors_count,
+          dignitaries_received: report.dignitaries,
+          products_exhibited: report.products_exhibited,
+          most_engaged_product: report.most_engaged,
+          engagements_count: report.engagements,
+          conversions_count: report.conversions,
+          significant_deals: report.deals,
+          new_requests: report.new_requests,
+          key_observations: report.key_observations,
+          challenges_recommendations: report.challenges,
+          improvements_next_day: report.improvements,
+          video_highlight_url: report.video_url
+        }]).then(function(res) {
+          if (res.error) console.warn("Supabase Sync Notice:", res.error.message);
+          else console.log("Report synced directly to Supabase live database!");
+        });
+      }
+
+      alert('Daily report for ' + report.day + ' submitted successfully! Your entries and analytics have been updated.');
+      switchExhibitorTab('history');
+      renderExhibitorHistory();
+      renderExhibitorAnalytics();
+    }
+
+    function renderExhibitorHistory() {
+      var tableBody = document.getElementById('exhibitorTableBody');
+      var container = document.getElementById('exhibitorSubmissionsList');
+      var myReports = getMyExhibitorReports();
+
+      // Render Formatted Table
+      if (tableBody) {
+        if (myReports.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-400 text-xs">No records logged yet.</td></tr>';
+        } else {
+          tableBody.innerHTML = myReports.map(function(r) {
+            return '<tr class="hover:bg-slate-50">' +
+              '<td class="py-3 px-3.5 font-bold text-slate-900">' + r.day + '</td>' +
+              '<td class="py-3 px-3.5">' + r.staff_count + '</td>' +
+              '<td class="py-3 px-3.5 font-semibold text-blue-900">' + r.visitors_count + '</td>' +
+              '<td class="py-3 px-3.5 font-semibold text-amber-900">' + r.engagements + '</td>' +
+              '<td class="py-3 px-3.5 font-semibold text-emerald-900">' + r.conversions + '</td>' +
+              '<td class="py-3 px-3.5 font-bold text-emerald-700">' + r.conversion_rate + '</td>' +
+              '<td class="py-3 px-3.5 max-w-[120px] truncate" title="' + r.most_engaged + '">' + r.most_engaged + '</td>' +
+              '<td class="py-3 px-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + (r.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + r.status + '</span></td>' +
+              '<td class="py-3 px-3.5 text-slate-600 italic max-w-[160px] truncate" title="' + (r.admin_feedback || 'No feedback yet') + '">' + (r.admin_feedback || 'Pending') + '</td>' +
+            '</tr>';
+          }).join('');
+        }
+      }
+
+      // Render Detailed Cards
+      if (container) {
+        if (myReports.length === 0) {
+          container.innerHTML = '<p class="text-sm text-slate-400 py-6 text-center">No reports submitted yet.</p>';
+        } else {
+          container.innerHTML = myReports.map(function(r) {
+            return '<div class="p-5 rounded-2xl border ' + (r.admin_feedback ? 'border-blue-300 bg-blue-50/30' : 'border-slate-200 bg-white') + ' shadow-sm space-y-3">' +
+              '<div class="flex justify-between items-start">' +
+                '<div><span class="font-extrabold text-sm text-slate-900">' + r.day + ' Report</span></div>' +
+                '<span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ' + (r.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + r.status + '</span>' +
+              '</div>' +
+              '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl text-xs">' +
+                '<div>Visitors: <strong>' + r.visitors_count + '</strong></div>' +
+                '<div>Engagements: <strong>' + r.engagements + '</strong></div>' +
+                '<div>Conversions: <strong>' + r.conversions + '</strong></div>' +
+                '<div>Rate: <strong class="text-emerald-700">' + r.conversion_rate + '</strong></div>' +
+              '</div>' +
+              '<p class="text-xs text-slate-700"><strong>Most Engaged:</strong> ' + r.most_engaged + '</p>' +
+              (r.admin_feedback ? 
+                '<div class="p-3.5 bg-blue-100/70 rounded-xl border border-blue-200">' +
+                  '<p class="text-xs font-bold text-blue-900 mb-1">💬 Admin Feedback Received:</p>' +
+                  '<p class="text-xs text-blue-800">' + r.admin_feedback + '</p>' +
+                '</div>' : 
+                '<p class="text-[11px] text-slate-400 italic">Awaiting review from the Expo Administration.</p>') +
+            '</div>';
+          }).join('');
+        }
+      }
+    }
+
+    function exportMyExhibitorEntries() {
+      var myReports = getMyExhibitorReports();
+      if (myReports.length === 0) {
+        alert('No entries to export yet.');
+        return;
+      }
+      var csv = 'Day,Staff,Visitors,Engagements,Conversions,Conversion Rate,Most Engaged Product,Significant Deals,New Requests,Status,Admin Feedback\n';
+      myReports.forEach(function(r) {
+        csv += '"' + r.day + '",' + r.staff_count + ',' + r.visitors_count + ',' + r.engagements + ',' + r.conversions + ',"' + r.conversion_rate + '","' + (r.most_engaged || '').replace(/"/g, '""') + '","' + (r.deals || '').replace(/"/g, '""') + '","' + (r.new_requests || '').replace(/"/g, '""') + '","' + r.status + '","' + (r.admin_feedback || '').replace(/"/g, '""') + '"\n';
+      });
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = currentUser.org.replace(/[^a-zA-Z0-9]/g, '_') + '_Daily_Reports.csv';
+      a.click();
+    }
+
+    // --- CLUSTER LOGIC ---
+    window.setupClusterPortal = function() {
+      document.getElementById('clusterTitleDisplay').textContent = currentUser.org;
+      document.getElementById('clusterLeadershipDisplay').textContent = 'Subchairman: ' + currentUser.subchairman + ' • Secretary: ' + currentUser.secretary;
+      document.getElementById('clSubchairman').value = currentUser.subchairman;
+      document.getElementById('clSecretary').value = currentUser.secretary;
+
+      renderClusterHistory();
+      renderClusterAnalytics();
+      switchClusterTab('daily');
+    };
+
+    function switchClusterTab(tabName) {
+      var dTab = document.getElementById('clusterDailyTab');
+      var aTab = document.getElementById('clusterAnalyticsTab');
+      var hTab = document.getElementById('clusterHistoryTab');
+      var fTab = document.getElementById('clusterFinalTab');
+
+      if (dTab) dTab.style.display = tabName === 'daily' ? 'block' : 'none';
+      if (aTab) aTab.style.display = tabName === 'analytics' ? 'block' : 'none';
+      if (hTab) hTab.style.display = tabName === 'history' ? 'block' : 'none';
+      if (fTab) fTab.style.display = tabName === 'final' ? 'block' : 'none';
+
+      var setBtn = function(id, active) {
+        var el = document.getElementById(id);
+        if (el) {
+          el.className = active
+            ? "px-4 py-2 rounded-xl text-xs font-bold bg-white text-emerald-900 shadow-sm transition cursor-pointer"
+            : "px-4 py-2 rounded-xl text-xs font-bold bg-emerald-950/60 hover:bg-white/20 text-white transition cursor-pointer";
+        }
+      };
+      setBtn('clTabBtnDaily', tabName === 'daily');
+      setBtn('clTabBtnAnalytics', tabName === 'analytics');
+      setBtn('clTabBtnHistory', tabName === 'history');
+      setBtn('clTabBtnFinal', tabName === 'final');
+
+      if (tabName === 'analytics') {
+        renderClusterAnalytics();
+      } else if (tabName === 'history') {
+        renderClusterHistory();
+      }
+    }
+
+    function renderClusterAnalytics() {
+      var myReports = getMyClusterReports();
+      var repEl = document.getElementById('clStatReports');
+      var msEl = document.getElementById('clStatMilestones');
+      var stEl = document.getElementById('clStatStatus');
+      var timeline = document.getElementById('clusterTimelineContainer');
+
+      if (repEl) repEl.textContent = myReports.length;
+      if (msEl) msEl.textContent = myReports.length;
+      if (stEl) stEl.textContent = myReports.length > 0 ? (myReports[0].status === 'reviewed' ? 'Reviewed' : 'Submitted') : 'Pending';
+
+      if (timeline) {
+        if (myReports.length === 0) {
+          timeline.innerHTML = '<p class="text-xs text-slate-400 py-4 text-center">No daily reports recorded yet to analyze.</p>';
+        } else {
+          timeline.innerHTML = myReports.map(function(r) {
+            return '<div class="p-3.5 bg-white rounded-xl border border-slate-200 text-xs space-y-1">' +
+              '<div class="flex justify-between font-bold text-slate-900">' +
+                '<span>' + r.day + ' Summary</span>' +
+                '<span class="text-emerald-700">' + r.status.toUpperCase() + '</span>' +
+              '</div>' +
+              '<p class="text-slate-600">' + r.summary + '</p>' +
+              '<p class="text-[11px] text-teal-800 font-semibold">🏆 Achievement: ' + r.achievements + '</p>' +
+            '</div>';
+          }).join('');
+        }
+      }
+    }
+
+    function handleClusterSubmit(e) {
+      e.preventDefault();
+      var report = {
+        id: 'cl_' + Date.now(),
+        user_email: currentUser.email,
+        cluster_name: currentUser.org,
+        subchairman: document.getElementById('clSubchairman').value.trim(),
+        secretary: document.getElementById('clSecretary').value.trim(),
+        day: document.getElementById('clusterDaySelect').value,
+        summary: document.getElementById('clSummary').value.trim(),
+        achievements: document.getElementById('clAchievements').value.trim(),
+        challenges_solutions: document.getElementById('clChallengesSolutions').value.trim(),
+        improvements: document.getElementById('clImprovements').value.trim(),
+        comments: document.getElementById('clComments').value.trim(),
+        status: 'submitted',
+        admin_feedback: null,
+        created_at: new Date().toISOString()
+      };
+
+      clusterReports.unshift(report);
+      setStore('cluster_reports', clusterReports);
+
+      // LIVE SUPABASE SYNC
+      if (supabaseClient) {
+        supabaseClient.from('cluster_daily_reports').insert([{
+          cluster_name: report.cluster_name,
+          subchairman_name: report.subchairman,
+          secretary_name: report.secretary,
+          exhibition_day: report.day,
+          activity_summary: report.summary,
+          significant_achievements: report.achievements,
+          challenges_solutions: report.challenges_solutions,
+          improvements_next_day: report.improvements,
+          comments: report.comments
+        }]).then(function(res) {
+          if (res.error) console.warn("Supabase Cluster Sync Notice:", res.error.message);
+          else console.log("Cluster report synced directly to Supabase live database!");
+        });
+      }
+
+      alert('Cluster Daily Report for ' + report.day + ' recorded successfully!');
+      switchClusterTab('history');
+      renderClusterHistory();
+    }
+
+    function handleDocUpload(e) {
+      var files = Array.from(e.target.files);
+      var container = document.getElementById('clDocPreviewContainer');
+      files.forEach(function(f) {
+        clusterDocFiles.push(f.name);
+        if (container) {
+          container.innerHTML += '<div class="px-3 py-1.5 bg-emerald-100 text-emerald-900 rounded-lg text-xs font-semibold">📄 ' + f.name + ' (Attached)</div>';
+        }
+      });
+    }
+
+    function handleClusterFinalSubmit(e) {
+      e.preventDefault();
+      var report = {
+        id: 'cl_final_' + Date.now(),
+        user_email: currentUser.email,
+        cluster_name: currentUser.org,
+        summary: document.getElementById('clFinalSummary').value.trim(),
+        leads: parseInt(document.getElementById('clFinalLeads').value) || 0,
+        deals: parseInt(document.getElementById('clFinalDeals').value) || 0,
+        documents: clusterDocFiles,
+        status: 'submitted',
+        admin_feedback: null,
+        submitted_at: new Date().toISOString()
+      };
+      clusterFinalReports.unshift(report);
+      setStore('cluster_final_reports', clusterFinalReports);
+      alert('Final Expo Cluster Report and attachments submitted successfully to Admin!');
+    }
+
+    function renderClusterHistory() {
+      var tableBody = document.getElementById('clusterTableBody');
+      var container = document.getElementById('clusterSubmissionsList');
+      var myReports = getMyClusterReports();
+
+      // Render Formatted Table
+      if (tableBody) {
+        if (myReports.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-slate-400 text-xs">No records logged yet.</td></tr>';
+        } else {
+          tableBody.innerHTML = myReports.map(function(r) {
+            return '<tr class="hover:bg-slate-50">' +
+              '<td class="py-3 px-3.5 font-bold text-slate-900">' + r.day + '</td>' +
+              '<td class="py-3 px-3.5 font-semibold text-slate-700">' + r.subchairman + '</td>' +
+              '<td class="py-3 px-3.5 font-semibold text-slate-700">' + r.secretary + '</td>' +
+              '<td class="py-3 px-3.5 max-w-[200px] truncate" title="' + r.summary + '">' + r.summary + '</td>' +
+              '<td class="py-3 px-3.5 max-w-[150px] truncate" title="' + r.achievements + '">' + r.achievements + '</td>' +
+              '<td class="py-3 px-3.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + (r.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + r.status + '</span></td>' +
+              '<td class="py-3 px-3.5 text-slate-600 italic max-w-[150px] truncate" title="' + (r.admin_feedback || 'No feedback yet') + '">' + (r.admin_feedback || 'Pending') + '</td>' +
+            '</tr>';
+          }).join('');
+        }
+      }
+
+      // Render Cards
+      if (container) {
+        if (myReports.length === 0) {
+          container.innerHTML = '<p class="text-sm text-slate-400 py-6 text-center">No cluster reports submitted yet.</p>';
+        } else {
+          container.innerHTML = myReports.map(function(r) {
+            return '<div class="p-5 rounded-2xl border ' + (r.admin_feedback ? 'border-emerald-300 bg-emerald-50/30' : 'border-slate-200 bg-white') + ' shadow-sm space-y-3">' +
+              '<div class="flex justify-between items-start">' +
+                '<div><span class="font-extrabold text-sm text-slate-900">' + r.day + ' Assessment</span></div>' +
+                '<span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ' + (r.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + r.status + '</span>' +
+              '</div>' +
+              '<p class="text-xs text-slate-700"><strong>Summary:</strong> ' + r.summary + '</p>' +
+              '<p class="text-xs text-slate-700"><strong>Achievements:</strong> ' + r.achievements + '</p>' +
+              (r.admin_feedback ? 
+                '<div class="p-3.5 bg-emerald-100/70 rounded-xl border border-emerald-200">' +
+                  '<p class="text-xs font-bold text-emerald-900 mb-1">💬 Admin Feedback Received:</p>' +
+                  '<p class="text-xs text-emerald-800">' + r.admin_feedback + '</p>' +
+                '</div>' : 
+                '<p class="text-[11px] text-slate-400 italic">Awaiting review from the Expo Administration.</p>') +
+            '</div>';
+          }).join('');
+        }
+      }
+    }
+
+    function exportMyClusterEntries() {
+      var myReports = getMyClusterReports();
+      if (myReports.length === 0) {
+        alert('No entries to export yet.');
+        return;
+      }
+      var csv = 'Day,Subchairman,Secretary,Summary of Activities,Significant Achievements,Challenges & Solutions,Improvements,Status,Admin Feedback\n';
+      myReports.forEach(function(r) {
+        csv += '"' + r.day + '","' + (r.subchairman || '').replace(/"/g, '""') + '","' + (r.secretary || '').replace(/"/g, '""') + '","' + (r.summary || '').replace(/"/g, '""') + '","' + (r.achievements || '').replace(/"/g, '""') + '","' + (r.challenges_solutions || '').replace(/"/g, '""') + '","' + (r.improvements || '').replace(/"/g, '""') + '","' + r.status + '","' + (r.admin_feedback || '').replace(/"/g, '""') + '"\n';
+      });
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = currentUser.org.replace(/[^a-zA-Z0-9]/g, '_') + '_Daily_Reports.csv';
+      a.click();
+    }
+
+    // --- ADMIN LOGIC ---
+    window.setupAdminPortal = function() {
+      computeAdminMetrics();
+      renderAdminFeed();
+      initAdminCharts();
+    };
+
+    function computeAdminMetrics() {
+      var totalReports = exhibitorReports.length + clusterReports.length + clusterFinalReports.length;
+      var totalVisitors = exhibitorReports.reduce(function(sum, r) { return sum + (r.visitors_count || 0); }, 0);
+      var totalEngagements = exhibitorReports.reduce(function(sum, r) { return sum + (r.engagements || 0); }, 0);
+      var totalConversions = exhibitorReports.reduce(function(sum, r) { return sum + (r.conversions || 0); }, 0);
+
+      var repEl = document.getElementById('adminMetricReports');
+      var visEl = document.getElementById('adminMetricVisitors');
+      var engEl = document.getElementById('adminMetricEngagements');
+      var conEl = document.getElementById('adminMetricConversions');
+
+      if (repEl) repEl.textContent = totalReports;
+      if (visEl) visEl.textContent = totalVisitors.toLocaleString();
+      if (engEl) engEl.textContent = totalEngagements.toLocaleString();
+      if (conEl) conEl.textContent = totalConversions.toLocaleString();
+
+      var rateEl = document.getElementById('adminMetricAvgRate');
+      if (rateEl && totalEngagements > 0) {
+        var avg = ((totalConversions / totalEngagements) * 100).toFixed(1);
+        rateEl.textContent = 'Avg rate: ' + avg + '%';
+      }
+    }
+
+    function renderAdminFeed() {
+      var filterType = document.getElementById('adminFilterType').value;
+      var filterDay = document.getElementById('adminFilterDay').value;
+      var search = (document.getElementById('adminSearchInput').value || '').toLowerCase();
+
+      var combined = [];
+      if (filterType === 'all' || filterType === 'exhibitor') {
+        exhibitorReports.forEach(function(r) { combined.push(Object.assign({}, r, { type: 'Exhibitor Daily', entityName: r.org_name, sub: r.booth })); });
+      }
+      if (filterType === 'all' || filterType === 'cluster_daily') {
+        clusterReports.forEach(function(r) { combined.push(Object.assign({}, r, { type: 'Cluster Daily', entityName: r.cluster_name, sub: 'Secretary: ' + r.secretary })); });
+      }
+      if (filterType === 'all' || filterType === 'cluster_final') {
+        clusterFinalReports.forEach(function(r) { combined.push(Object.assign({}, r, { type: 'Cluster Final', day: 'Final', entityName: r.cluster_name, sub: 'Final Report' })); });
+      }
+
+      if (filterDay !== 'all') {
+        combined = combined.filter(function(i) { return i.day === filterDay; });
+      }
+      if (search) {
+        combined = combined.filter(function(i) { return (i.entityName || '').toLowerCase().indexOf(search) !== -1; });
+      }
+
+      var tbody = document.getElementById('adminFeedTableBody');
+      if (!tbody) return;
+      if (combined.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-slate-400 text-xs">No records found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = combined.map(function(item) {
+        return '<tr class="hover:bg-slate-50">' +
+          '<td class="py-3 px-4 font-bold text-slate-900">' + item.entityName + '<div class="text-[11px] font-normal text-slate-400">' + item.sub + '</div></td>' +
+          '<td class="py-3 px-4"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">' + item.type + '</span></td>' +
+          '<td class="py-3 px-4 font-semibold text-xs">' + item.day + '</td>' +
+          '<td class="py-3 px-4 text-xs">' + (item.type === 'Exhibitor Daily' ? 'Visitors: ' + item.visitors_count + ' • Conv: ' + item.conversions : (item.summary ? item.summary.slice(0, 40) + '...' : 'Report recorded')) + '</td>' +
+          '<td class="py-3 px-4 text-xs font-bold ' + (item.status === 'reviewed' ? 'text-emerald-700' : 'text-amber-700') + '">' + item.status.toUpperCase() + '</td>' +
+          '<td class="py-3 px-4 text-right"><button type="button" onclick="openFeedbackModal(\'' + item.id + '\', \'' + item.type + '\')" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 cursor-pointer">Review & Feedback</button></td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function openFeedbackModal(reportId, reportType) {
+      var target = null;
+      if (reportType === 'Exhibitor Daily') {
+        target = exhibitorReports.find(function(r) { return r.id === reportId; });
+      } else if (reportType === 'Cluster Daily') {
+        target = clusterReports.find(function(r) { return r.id === reportId; });
+      } else {
+        target = clusterFinalReports.find(function(r) { return r.id === reportId; });
+      }
+      if (!target) return;
+
+      activeFeedbackTarget = { reportId: reportId, reportType: reportType, target: target };
+      document.getElementById('modalTargetLabel').textContent = 'To: ' + (target.org_name || target.cluster_name) + ' (' + (target.day || 'Final') + ')';
+      document.getElementById('modalFeedbackText').value = target.admin_feedback || '';
+      document.getElementById('feedbackModal').classList.remove('hidden');
+    }
+
+    function closeFeedbackModal() {
+      document.getElementById('feedbackModal').classList.add('hidden');
+      activeFeedbackTarget = null;
+    }
+
+    function submitAdminFeedback() {
+      if (!activeFeedbackTarget) return;
+      var text = document.getElementById('modalFeedbackText').value.trim();
+      if (!text) {
+        alert('Please enter some feedback.');
+        return;
+      }
+      activeFeedbackTarget.target.admin_feedback = text;
+      activeFeedbackTarget.target.status = 'reviewed';
+
+      if (activeFeedbackTarget.reportType === 'Exhibitor Daily') {
+        setStore('exhibitor_reports', exhibitorReports);
+      } else if (activeFeedbackTarget.reportType === 'Cluster Daily') {
+        setStore('cluster_reports', clusterReports);
+      } else {
+        setStore('cluster_final_reports', clusterFinalReports);
+      }
+
+      closeFeedbackModal();
+      renderAdminFeed();
+      computeAdminMetrics();
+      alert('Feedback sent successfully! The exhibitor/cluster will see it immediately upon login.');
+    }
+
+    function initAdminCharts() {
+      if (!window.Chart) return;
+      var ctx1 = document.getElementById('adminVisitorsChart');
+      if (ctx1) {
+        if (visitorsChart) visitorsChart.destroy();
+        visitorsChart = new Chart(ctx1.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'],
+            datasets: [
+              { label: 'Visitors', data: [320, 480, 560, 690, 810, 950, 1100], borderColor: '#1d4ed8', tension: 0.3 },
+              { label: 'Engagements', data: [140, 210, 280, 390, 450, 520, 610], borderColor: '#f59e0b', tension: 0.3 }
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+
+      var ctx2 = document.getElementById('adminProductsChart');
+      if (ctx2) {
+        if (productsChart) productsChart.destroy();
+        productsChart = new Chart(ctx2.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: ['360 Lead Capture', 'PCDL Vouchers', 'KingsChat Pro', 'Espees Pay'],
+            datasets: [{ label: 'Engagements', data: [140, 120, 98, 85], backgroundColor: '#3b82f6', borderRadius: 8 }]
+          },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+    }
+
+    function exportDataToCSV() {
+      var csv = 'Type,Entity Name,Location,Day,Visitors,Engagements,Conversions,Rate,Feedback\n';
+      exhibitorReports.forEach(function(r) {
+        csv += '"Exhibitor","' + r.org_name + '","' + r.booth + '","' + r.day + '",' + r.visitors_count + ',' + r.engagements + ',' + r.conversions + ',"' + r.conversion_rate + '","' + (r.admin_feedback || '') + '"\n';
+      });
+      clusterReports.forEach(function(c) {
+        csv += '"Cluster","' + c.cluster_name + '","N/A","' + c.day + '",0,0,0,"0%","' + (c.admin_feedback || '') + '"\n';
+      });
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'LoveWorld_Expo_Reports.csv';
+      a.click();
+    }
+  
+    // Auto-restore session from localStorage if already logged in
+    (function restoreActiveSession() {
+      var saved = localStorage.getItem('expo_current_user');
+      if (saved) {
+        try {
+          var u = JSON.parse(saved);
+          if (u && u.role) {
+            currentUser = u;
+            setTimeout(function() {
+              var loginSec = document.getElementById('loginSection');
+              if (loginSec) { loginSec.style.display = 'none'; loginSec.classList.add('hidden'); }
+              var nav = document.getElementById('appNav');
+              if (nav) { nav.style.display = 'block'; nav.classList.remove('hidden'); }
+              var nameEl = document.getElementById('userNameDisplay');
+              var roleEl = document.getElementById('userRoleBadge');
+              var locEl = document.getElementById('userLocationDisplay');
+              if (nameEl) nameEl.textContent = currentUser.org || currentUser.name;
+              if (roleEl) roleEl.textContent = currentUser.role.toUpperCase();
+              if (locEl) locEl.textContent = currentUser.location;
+
+              var exSec = document.getElementById('exhibitorSection');
+              var clSec = document.getElementById('clusterSection');
+              var adSec = document.getElementById('adminSection');
+              if (exSec) { exSec.style.display = 'none'; exSec.classList.add('hidden'); }
+              if (clSec) { clSec.style.display = 'none'; clSec.classList.add('hidden'); }
+              if (adSec) { adSec.style.display = 'none'; adSec.classList.add('hidden'); }
+
+              if (currentUser.role === 'admin') {
+                if (adSec) { adSec.style.display = 'block'; adSec.classList.remove('hidden'); }
+                if (typeof window.setupAdminPortal === 'function') window.setupAdminPortal();
+              } else if (currentUser.role === 'cluster') {
+                if (clSec) { clSec.style.display = 'block'; clSec.classList.remove('hidden'); }
+                if (typeof window.setupClusterPortal === 'function') window.setupClusterPortal();
+              } else {
+                if (exSec) { exSec.style.display = 'block'; exSec.classList.remove('hidden'); }
+                if (typeof window.setupExhibitorPortal === 'function') window.setupExhibitorPortal();
+              }
+            }, 50);
+          }
+        } catch(e) {}
+      }
+    })();
+
+  </script>
+</body>
+</html>

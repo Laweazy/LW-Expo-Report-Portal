@@ -660,7 +660,7 @@ function AdminPortal({ profile, onLogout }) {
             <p className="text-slate-500 text-xs font-bold uppercase">Cluster Daily Reports</p>
             <h3 className="text-3xl font-bold text-slate-800 mt-1">{clusterDaily.length}</h3>
           </div>
-          <div className="bg-white p-6 ncol-span-1 bg-white p-6 rounded-2xl border shadow-sm">
+          <div className="bg-white p-6 rounded-2xl border shadow-sm">
             <p className="text-slate-500 text-xs font-bold uppercase">Total Expo Visitors</p>
             <h3 className="text-3xl font-bold text-indigo-600 mt-1">
               {exhibitorReports.reduce((acc, r) => acc + (r.number_of_visitors_recorded || 0), 0)}
